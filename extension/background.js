@@ -138,7 +138,9 @@ function kapat(kalici = true) {
 
 chrome.runtime.onMessage.addListener((msg, sender, yanit) => {
   if (msg.tip === "rveBaglan") {
-    baglan(msg.kod, msg.tabId);
+    // Popup tabId verir; content script köprüsünden gelince gönderenin sekmesi
+    const hedefTab = msg.tabId != null ? msg.tabId : sender.tab && sender.tab.id;
+    baglan(msg.kod, hedefTab);
     yanit({ ok: true });
   } else if (msg.tip === "rveKapat") {
     kapat(true);
@@ -147,6 +149,8 @@ chrome.runtime.onMessage.addListener((msg, sender, yanit) => {
     yanit({ bagli: !!(ws && ws.readyState === WebSocket.OPEN), kod });
   } else if (msg.tip === "rveYerel") {
     yayinla(msg.olay);
+    yanit({ ok: true });
+  } else if (msg.tip === "rvePing") {
     yanit({ ok: true });
   }
   return true; // asenkron yanıt için kanalı açık tut
