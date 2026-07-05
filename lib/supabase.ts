@@ -3,6 +3,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+/** Sekme kapanırken keepalive fetch ile oda silmek için ham değerler. */
+export const supabaseUrl = url ?? null;
+export const supabaseAnonKey = anonKey ?? null;
+
 /** Ortam değişkenleri yoksa null döner; arayüz "kurulum eksik" ekranı gösterir. */
 export const supabase: SupabaseClient | null =
   url && anonKey ? createClient(url, anonKey) : null;
