@@ -20,11 +20,6 @@ import Sohbet from "@/components/Sohbet";
 import Katilimcilar from "@/components/Katilimcilar";
 import GeriSayim from "@/components/GeriSayim";
 import KurulumEksik from "@/components/KurulumEksik";
-import {
-  TepkiKatmani,
-  TepkiSeridi,
-  type UcanTepki,
-} from "@/components/Tepkiler";
 
 type Durum = "yukleniyor" | "bulunamadi" | "hazir";
 
@@ -45,7 +40,6 @@ export default function OdaSayfasi() {
   const [sinemaModu, setSinemaModu] = useState(false);
   const [videoGirdi, setVideoGirdi] = useState("");
   const [kopyalandi, setKopyalandi] = useState(false);
-  const [tepkiler, setTepkiler] = useState<UcanTepki[]>([]);
   const [gecikmeUyarisi, setGecikmeUyarisi] = useState(false);
   // Harici (Netflix vb.) ortak senkron saati: oynuyorsa gecen = taban + (now - ts)
   const [hSaat, setHSaat] = useState<{
@@ -61,7 +55,6 @@ export default function OdaSayfasi() {
   const odaIdRef = useRef<string | null>(null);
   const baslangicSaniyeRef = useRef(0);
   const baglantiZamaniRef = useRef(0);
-  const tepkiSayacRef = useRef(0);
 
   // Takma adı yükle
   useEffect(() => {
@@ -125,18 +118,6 @@ export default function OdaSayfasi() {
     };
   }, [odaKodu]);
 
-  // Uçan emoji tepkisi göster (yerel + uzaktan)
-  const tepkiGoster = useCallback((emoji: string) => {
-    const id = ++tepkiSayacRef.current;
-    setTepkiler((mevcut) => [
-      ...mevcut.slice(-30), // aşırı yığılmayı önle
-      { id, emoji, sol: 8 + Math.random() * 84 },
-    ]);
-    setTimeout(() => {
-      setTepkiler((mevcut) => mevcut.filter((t) => t.id !== id));
-    }, 2700);
-  }, []);
-
   // Yerel "katıldı/ayrıldı" bildirimi
   const sistemMesaji = useCallback((icerik: string) => {
     setMesajlar((mevcut) => [
@@ -176,10 +157,8 @@ export default function OdaSayfasi() {
       setGeriSayimBaslatan(olay.baslatan);
     } else if (olay.tur === "hariciDurdur") {
       setHSaat({ oynuyor: false, taban: Math.max(0, olay.saniye), ts: Date.now() });
-    } else if (olay.tur === "tepki") {
-      tepkiGoster(olay.emoji);
     }
-  }, [tepkiGoster]);
+  }, []);
 
   // Gerçek zamanlı kanal (oda başına bir tane)
   useEffect(() => {
@@ -387,18 +366,6 @@ export default function OdaSayfasi() {
     }
   }, []);
 
-  const tepkiGonder = useCallback(
-    (emoji: string) => {
-      tepkiGoster(emoji);
-      kanalRef.current?.send({
-        type: "broadcast",
-        event: "senkron",
-        payload: { tur: "tepki", emoji },
-      });
-    },
-    [tepkiGoster]
-  );
-
   // Odanın kalıcı durumunu okuyup kendi oynatıcını herkese hizalar
   async function senkronla() {
     if (!oda || !supabase) return;
@@ -599,8 +566,6 @@ export default function OdaSayfasi() {
                 </p>
               </div>
             )}
-            {oda?.video_url && <TepkiSeridi onTepki={tepkiGonder} />}
-            <TepkiKatmani tepkiler={tepkiler} />
             {geriSayimBaslatan && (
               <GeriSayim baslatan={geriSayimBaslatan} onBitti={geriSayimBitti} />
             )}
