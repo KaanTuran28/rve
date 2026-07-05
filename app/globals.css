@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+@theme {
+  /* sinema salonu paleti */
+  --color-perde: #0d0b10;   /* salon karanlığı */
+  --color-koltuk: #171420;  /* yüzeyler */
+  --color-kadife: #1f1a2b;  /* yükseltilmiş yüzey */
+  --color-cizgi: #2c2539;   /* kenarlıklar */
+  --color-isik: #ede9f2;    /* ana metin */
+  --color-soluk: #8b8496;   /* ikincil metin */
+  --color-amber: #ffb454;   /* projektör ışığı */
+  --color-canli: #e4577b;   /* canlı / kayıt */
+
+  --font-display: var(--font-display), ui-sans-serif, sans-serif;
+  --font-body: var(--font-body), ui-sans-serif, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+/* projektör huzmesi */
+.huzme {
+  background:
+    radial-gradient(ellipse 60% 45% at 50% -10%, rgba(255, 180, 84, 0.14), transparent 70%),
+    radial-gradient(ellipse 45% 35% at 50% 110%, rgba(228, 87, 123, 0.06), transparent 70%);
+}
+
+/* bilet kenarı: zımba delikleri */
+.bilet {
+  position: relative;
+  border: 1px dashed var(--color-cizgi);
+}
+.bilet::before,
+.bilet::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--color-perde);
+  border: 1px dashed var(--color-cizgi);
+  transform: translateY(-50%);
+}
+.bilet::before { left: -10px; }
+.bilet::after { right: -10px; }
+
+/* canlı nokta */
+@keyframes nabiz {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.nabiz {
+  animation: nabiz 1.6s ease-in-out infinite;
+}
+
+/* geri sayım rakamı */
+@keyframes rakam {
+  0% { transform: scale(1.6); opacity: 0; }
+  25% { transform: scale(1); opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: scale(0.92); opacity: 0; }
+}
+.rakam {
+  animation: rakam 1s ease-out both;
+}
+
+/* uçan emoji tepkisi */
+@keyframes ucus {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  10% { opacity: 1; transform: translateY(-6vh) scale(1.1); }
+  70% { opacity: 1; }
+  100% { transform: translateY(-55vh) scale(1) rotate(12deg); opacity: 0; }
+}
+.ucan-tepki {
+  animation: ucus 2.6s ease-out both;
+  will-change: transform, opacity;
+}
+
+/* film taneciği: hafif doku, ekranı canlı tutar */
+.tanecik::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+/* logo ışıması */
+.parlama {
+  text-shadow: 0 0 40px rgba(255, 180, 84, 0.35);
+}
+
+/* erişilebilir odak halkası */
+:focus-visible {
+  outline: 2px solid var(--color-amber);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nabiz, .rakam, .ucan-tepki { animation: none; }
+}
+
+/* ince kaydırma çubuğu */
+.ince-kaydirma::-webkit-scrollbar { width: 6px; }
+.ince-kaydirma::-webkit-scrollbar-thumb {
+  background: var(--color-cizgi);
+  border-radius: 3px;
+}
