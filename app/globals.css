@@ -67,18 +67,6 @@ body {
   animation: rakam 1s ease-out both;
 }
 
-/* uçan emoji tepkisi */
-@keyframes ucus {
-  0% { transform: translateY(0) scale(0.6); opacity: 0; }
-  10% { opacity: 1; transform: translateY(-6vh) scale(1.1); }
-  70% { opacity: 1; }
-  100% { transform: translateY(-55vh) scale(1) rotate(12deg); opacity: 0; }
-}
-.ucan-tepki {
-  animation: ucus 2.6s ease-out both;
-  will-change: transform, opacity;
-}
-
 /* film taneciği: hafif doku, ekranı canlı tutar */
 .tanecik::after {
   content: "";
@@ -102,7 +90,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nabiz, .rakam, .ucan-tepki { animation: none; }
+  .nabiz, .rakam { animation: none; }
 }
 
 /* ince kaydırma çubuğu */
