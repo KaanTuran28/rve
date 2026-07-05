@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   supabase,
+  supabaseUrl,
+  supabaseAnonKey,
   takmaAdOku,
   takmaAdKaydet,
   youtubeIdAyikla,
@@ -27,6 +29,7 @@ type Durum = "yukleniyor" | "bulunamadi" | "hazir";
 
 export default function OdaSayfasi() {
   const { kod } = useParams<{ kod: string }>();
+  const router = useRouter();
   const odaKodu = (kod ?? "").toUpperCase();
 
   const [durum, setDurum] = useState<Durum>("yukleniyor");
@@ -191,6 +194,48 @@ export default function OdaSayfasi() {
       supabase!.removeChannel(kanal);
     };
   }, [oda?.id, ad, odaKodu, olayIsle, sistemMesaji]);
+
+  // Presence'ta benden başka kimse yoksa odanın son üyesiyim
+  const sonUyeyMiyim = useCallback(() => {
+    const kanal = kanalRef.current;
+    if (!kanal) return false;
+    return Object.keys(kanal.presenceState()).length <= 1;
+  }, []);
+
+  // Çıkışta / son üyeyken odayı ve mesajlarını DB'den sil (mesajlar FK cascade ile gider)
+  const cikisYap = useCallback(async () => {
+    const kanal = kanalRef.current;
+    if (sonUyeyMiyim() && supabase && odaIdRef.current) {
+      await supabase.from("rooms").delete().eq("id", odaIdRef.current);
+    }
+    if (kanal) {
+      await kanal.untrack().catch(() => {});
+      supabase?.removeChannel(kanal);
+    }
+    kanalRef.current = null;
+    router.push("/");
+  }, [sonUyeyMiyim, router]);
+
+  // Sekme kapanırken son üyeysem keepalive fetch ile odayı sil (async client'a güvenilmez)
+  useEffect(() => {
+    const temizle = (e: PageTransitionEvent) => {
+      // bfcache'e giriyorsa (mobilde arka plana alma vb.) geri dönülebilir; silme
+      if (e.persisted) return;
+      if (!odaIdRef.current || !sonUyeyMiyim()) return;
+      if (!supabaseUrl || !supabaseAnonKey) return;
+      fetch(`${supabaseUrl}/rest/v1/rooms?id=eq.${odaIdRef.current}`, {
+        method: "DELETE",
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+          Prefer: "return=minimal",
+        },
+        keepalive: true,
+      }).catch(() => {});
+    };
+    window.addEventListener("pagehide", temizle);
+    return () => window.removeEventListener("pagehide", temizle);
+  }, [sonUyeyMiyim]);
 
   // Oynatıcıdan gelen yerel olayları yayınla + kalıcı duruma yaz
   const yerelOlay = useCallback((olay: SenkronOlay) => {
@@ -441,6 +486,13 @@ export default function OdaSayfasi() {
             title="Tam ekran"
           >
             ⛶ Tam ekran
+          </button>
+          <button
+            onClick={cikisYap}
+            className="rounded-lg border border-cizgi px-3 py-1.5 text-xs text-soluk transition hover:border-red-500/60 hover:text-red-400"
+            title="Odadan ayrıl (son kişiysen oda silinir)"
+          >
+            Çıkış
           </button>
         </div>
       </header>

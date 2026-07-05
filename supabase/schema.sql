@@ -30,5 +30,6 @@ alter table messages enable row level security;
 create policy "rooms_select" on rooms for select using (true);
 create policy "rooms_insert" on rooms for insert with check (true);
 create policy "rooms_update" on rooms for update using (true);
+create policy "rooms_delete" on rooms for delete using (true);
 create policy "messages_select" on messages for select using (true);
 create policy "messages_insert" on messages for insert with check (true);
