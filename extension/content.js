@@ -76,6 +76,22 @@
     return true;
   });
 
+  // Sayfa → eklenti köprüsü: Rve sitesi "Eklentiye bağla" derse buradan iletilir.
+  window.addEventListener("message", (e) => {
+    if (e.source !== window || !e.data) return;
+    const d = e.data;
+    if (d.__rve === "baglan" && typeof d.kod === "string") {
+      chrome.runtime
+        .sendMessage({ tip: "rveBaglan", kod: d.kod.toUpperCase() })
+        .catch(() => {});
+    } else if (d.__rve === "kapat") {
+      chrome.runtime.sendMessage({ tip: "rveKapat" }).catch(() => {});
+    }
+  });
+
+  // Sayfa açılınca service worker'ı uyandır (varsa önceki bağlantı canlanır)
+  chrome.runtime.sendMessage({ tip: "rvePing" }).catch(() => {});
+
   // Video geç yüklenebilir / öğe değişebilir → periyodik yeniden bağla
   setInterval(hookla, 1500);
   hookla();

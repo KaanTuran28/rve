@@ -29,6 +29,10 @@ sayfadaki oynatıcıyı odanın Supabase kanalına bağlar.
 4. Araç çubuğunda **Rve Senkron** simgesi çıkar (puzzle simgesinden sabitleyebilirsin).
 5. Arkadaşların da aynı klasörü (zip'leyip gönder) kendi tarayıcılarına bu adımlarla yükler.
 
+> Not: Bu "paketlenmemiş yükle" yolu hem Chrome'da hem Edge'de çalışır. (Yalnızca
+> Chrome'u **komut satırından** `--load-extension` ile açmak politika gereği engellidir;
+> normal arayüzden yükleme etkilenmez.)
+
 ## Kullanım
 1. Rve sitesinde (`rve-ebon.vercel.app`) oda kur, kodu paylaş.
 2. Herkes **aynı sitede aynı içeriği** ayrı sekmede açsın (aynı film sayfası / aynı Netflix
