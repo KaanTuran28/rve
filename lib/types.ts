@@ -27,6 +27,7 @@ export type SenkronOlay =
   | { tur: "duraklat"; saniye: number }
   | { tur: "video"; url: string; videoTipi: VideoTipi }
   | { tur: "geriSayim"; baslatan: string }
+  | { tur: "hariciDurdur"; saniye: number }
   | { tur: "tepki"; emoji: string };
 
 export interface OynaticiKontrol {

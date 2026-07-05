@@ -10,6 +10,7 @@ import {
   takmaAdOku,
   takmaAdKaydet,
   youtubeIdAyikla,
+  yayinServisi,
 } from "@/lib/supabase";
 import type { Mesaj, Oda, OynaticiKontrol, SenkronOlay } from "@/lib/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -46,8 +47,16 @@ export default function OdaSayfasi() {
   const [kopyalandi, setKopyalandi] = useState(false);
   const [tepkiler, setTepkiler] = useState<UcanTepki[]>([]);
   const [gecikmeUyarisi, setGecikmeUyarisi] = useState(false);
+  // Harici (Netflix vb.) ortak senkron saati: oynuyorsa gecen = taban + (now - ts)
+  const [hSaat, setHSaat] = useState<{
+    oynuyor: boolean;
+    taban: number;
+    ts: number;
+  }>({ oynuyor: false, taban: 0, ts: 0 });
 
   const kanalRef = useRef<RealtimeChannel | null>(null);
+  const hSaatRef = useRef(hSaat);
+  hSaatRef.current = hSaat;
   const oynaticiRef = useRef<OynaticiKontrol | null>(null);
   const odaIdRef = useRef<string | null>(null);
   const baslangicSaniyeRef = useRef(0);
@@ -88,6 +97,18 @@ export default function OdaSayfasi() {
       }
       baslangicSaniyeRef.current = Math.max(0, konum);
       odaIdRef.current = odaVerisi.id;
+      // Harici içerik için ortak saati oda kaydından türet (geç gelen senkron kalır)
+      if (odaVerisi.video_type === "external") {
+        let gecen = odaVerisi.playback_time;
+        if (odaVerisi.is_playing) {
+          gecen += (Date.now() - Date.parse(odaVerisi.updated_at)) / 1000;
+        }
+        setHSaat({
+          oynuyor: odaVerisi.is_playing,
+          taban: Math.max(0, gecen),
+          ts: Date.now(),
+        });
+      }
       setOda(odaVerisi);
       setDurum("hazir");
 
@@ -139,6 +160,7 @@ export default function OdaSayfasi() {
       oynaticiRef.current?.duraklat(olay.saniye);
     } else if (olay.tur === "video") {
       baslangicSaniyeRef.current = 0;
+      setHSaat({ oynuyor: false, taban: 0, ts: 0 });
       setOda((onceki) =>
         onceki
           ? {
@@ -152,6 +174,8 @@ export default function OdaSayfasi() {
       );
     } else if (olay.tur === "geriSayim") {
       setGeriSayimBaslatan(olay.baslatan);
+    } else if (olay.tur === "hariciDurdur") {
+      setHSaat({ oynuyor: false, taban: Math.max(0, olay.saniye), ts: Date.now() });
     } else if (olay.tur === "tepki") {
       tepkiGoster(olay.emoji);
     }
@@ -272,6 +296,7 @@ export default function OdaSayfasi() {
         ? girdi
         : `https://${girdi}`;
     baslangicSaniyeRef.current = 0;
+    setHSaat({ oynuyor: false, taban: 0, ts: 0 });
     setOda({
       ...oda,
       video_url: yeniUrl,
@@ -318,6 +343,49 @@ export default function OdaSayfasi() {
     // broadcast self kapalı: yerelde elle başlat
     setGeriSayimBaslatan(ad);
   }, [ad]);
+
+  // 3-2-1 bitince harici saati başlat/devam ettir; başlatan kişi kalıcı duruma yazar
+  const geriSayimBitti = useCallback(() => {
+    setHSaat((s) => ({ oynuyor: true, taban: s.taban, ts: Date.now() }));
+    if (geriSayimBaslatan === ad && supabase && odaIdRef.current) {
+      supabase
+        .from("rooms")
+        .update({
+          is_playing: true,
+          playback_time: hSaatRef.current.taban,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", odaIdRef.current)
+        .then(() => {});
+    }
+    setGeriSayimBaslatan(null);
+  }, [geriSayimBaslatan, ad]);
+
+  // Harici içeriği herkeste durdur (saat dondurulur + kalıcı duruma yazılır)
+  const hariciDurdur = useCallback(() => {
+    const s = hSaatRef.current;
+    const konum = Math.max(
+      0,
+      s.oynuyor ? s.taban + (Date.now() - s.ts) / 1000 : s.taban
+    );
+    setHSaat({ oynuyor: false, taban: konum, ts: Date.now() });
+    kanalRef.current?.send({
+      type: "broadcast",
+      event: "senkron",
+      payload: { tur: "hariciDurdur", saniye: konum },
+    });
+    if (supabase && odaIdRef.current) {
+      supabase
+        .from("rooms")
+        .update({
+          is_playing: false,
+          playback_time: konum,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", odaIdRef.current)
+        .then(() => {});
+    }
+  }, []);
 
   const tepkiGonder = useCallback(
     (emoji: string) => {
@@ -511,7 +579,12 @@ export default function OdaSayfasi() {
               ) : (
                 <HariciIzleyici
                   url={oda.video_url}
+                  servis={yayinServisi(oda.video_url)}
+                  oynuyor={hSaat.oynuyor}
+                  taban={hSaat.taban}
+                  ts={hSaat.ts}
                   onGeriSayim={geriSayimBaslat}
+                  onDurdur={hariciDurdur}
                 />
               )
             ) : (
@@ -529,10 +602,7 @@ export default function OdaSayfasi() {
             {oda?.video_url && <TepkiSeridi onTepki={tepkiGonder} />}
             <TepkiKatmani tepkiler={tepkiler} />
             {geriSayimBaslatan && (
-              <GeriSayim
-                baslatan={geriSayimBaslatan}
-                onBitti={() => setGeriSayimBaslatan(null)}
-              />
+              <GeriSayim baslatan={geriSayimBaslatan} onBitti={geriSayimBitti} />
             )}
           </div>
 

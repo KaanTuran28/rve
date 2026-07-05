@@ -21,6 +21,33 @@ export function kodUret(uzunluk = 6): string {
   return kod;
 }
 
+/**
+ * DRM'li / gömülmeye izin vermeyen bilinen yayın servisleri. Bunlar iframe'de
+ * boş kalır; arayüz iframe yerine "kendi hesabınla aç + ortak senkron" panelini gösterir.
+ */
+const YAYIN_SERVISLERI: { anahtar: string; ad: string }[] = [
+  { anahtar: "netflix.", ad: "Netflix" },
+  { anahtar: "disneyplus.", ad: "Disney+" },
+  { anahtar: "hbomax.", ad: "HBO Max" },
+  { anahtar: "max.com", ad: "Max" },
+  { anahtar: "primevideo.", ad: "Prime Video" },
+  { anahtar: "amazon.", ad: "Prime Video" },
+  { anahtar: "hulu.", ad: "Hulu" },
+  { anahtar: "blutv.", ad: "BluTV" },
+  { anahtar: "exxen.", ad: "Exxen" },
+  { anahtar: "gain.tv", ad: "Gain" },
+  { anahtar: "tabii.", ad: "tabii" },
+  { anahtar: "mubi.", ad: "MUBI" },
+  { anahtar: "appletv", ad: "Apple TV+" },
+];
+
+/** URL bilinen bir yayın servisiyse adını döndürür, değilse null. */
+export function yayinServisi(url: string): string | null {
+  const u = url.toLowerCase();
+  for (const s of YAYIN_SERVISLERI) if (u.includes(s.anahtar)) return s.ad;
+  return null;
+}
+
 export function youtubeIdAyikla(girdi: string): string | null {
   const metin = girdi.trim();
   const eslesme = metin.match(
