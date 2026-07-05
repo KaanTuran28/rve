@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Rve — Video Senkron",
+  "version": "0.2.0",
+  "description": "Rve odandaki arkadaşlarınla herhangi bir video sitesini (Netflix, film siteleri…) senkron izle: oynat/duraklat/sar herkeste aynı anda.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Rve Senkron"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 260px;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: #14100c;
+        color: #f4ece0;
+        padding: 16px;
+      }
+      h1 {
+        margin: 0 0 2px;
+        font-size: 16px;
+        letter-spacing: -0.02em;
+      }
+      h1 span {
+        color: #f0a830;
+      }
+      .alt {
+        margin: 0 0 14px;
+        font-size: 11px;
+        color: #9a8f7f;
+      }
+      #durum {
+        font-size: 12px;
+        padding: 7px 10px;
+        border-radius: 8px;
+        background: #221b13;
+        border: 1px solid #322a1f;
+        margin-bottom: 12px;
+      }
+      #durum.bagli {
+        border-color: rgba(240, 168, 48, 0.5);
+        color: #f0a830;
+      }
+      input {
+        width: 100%;
+        padding: 9px 11px;
+        font-size: 15px;
+        letter-spacing: 0.25em;
+        text-transform: uppercase;
+        text-align: center;
+        border-radius: 8px;
+        border: 1px solid #322a1f;
+        background: #0e0b08;
+        color: #f4ece0;
+        outline: none;
+        margin-bottom: 10px;
+      }
+      input:focus {
+        border-color: rgba(240, 168, 48, 0.6);
+      }
+      .satir {
+        display: flex;
+        gap: 8px;
+      }
+      button {
+        flex: 1;
+        padding: 9px;
+        font-size: 13px;
+        font-weight: 700;
+        border-radius: 8px;
+        border: 1px solid #322a1f;
+        cursor: pointer;
+        transition: filter 0.15s;
+      }
+      button:hover {
+        filter: brightness(1.1);
+      }
+      #baglan {
+        background: #f0a830;
+        color: #14100c;
+        border-color: #f0a830;
+      }
+      #kapat {
+        background: transparent;
+        color: #f4ece0;
+      }
+      .ipucu {
+        margin: 14px 0 0;
+        font-size: 11px;
+        line-height: 1.5;
+        color: #9a8f7f;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Rve <span>Senkron</span></h1>
+    <p class="alt">Açık video sitesini odandaki herkesle senkronla</p>
+    <div id="durum">Bağlı değil</div>
+    <input id="kod" placeholder="ODA KODU" maxlength="6" autofocus />
+    <div class="satir">
+      <button id="baglan">Bağlan</button>
+      <button id="kapat">Ayrıl</button>
+    </div>
+    <p class="ipucu">
+      İzleyeceğiniz sitede (Netflix, film sitesi, herhangi bir video) sekmeyi
+      aç, Rve sitesindeki oda kodunu buraya gir. Herkes aynı içeriği aynı sitede
+      açtığında oynat/duraklat/sar senkron olur.
+    </p>
+    <script src="popup.js"></script>
+  </body>
+</html>
