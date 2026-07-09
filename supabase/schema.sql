@@ -9,6 +9,11 @@ create table if not exists rooms (
   video_type text not null default 'youtube' check (video_type in ('youtube', 'external')),
   is_playing boolean not null default false,
   playback_time double precision not null default 0,
+  -- Video kuyruğu: [{url, videoTipi, etiket}] dizisi
+  queue jsonb not null default '[]'::jsonb,
+  -- Oda sahibi kilidi: token oda kuranın localStorage'ında saklanır (auth yok)
+  owner_token text,
+  locked boolean not null default false,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
@@ -33,3 +38,12 @@ create policy "rooms_update" on rooms for update using (true);
 create policy "rooms_delete" on rooms for delete using (true);
 create policy "messages_select" on messages for select using (true);
 create policy "messages_insert" on messages for insert with check (true);
+
+-- Yetim oda temizliği: 24 saattir güncellenmeyen odaları saatte bir sil.
+-- (Son üyenin tarayıcısı çökerse pagehide tetiklenmez; bu job artıkları toplar.)
+create extension if not exists pg_cron;
+select cron.schedule(
+  'rve_eski_oda_temizligi',
+  '17 * * * *',
+  $$delete from public.rooms where updated_at < now() - interval '24 hours'$$
+);

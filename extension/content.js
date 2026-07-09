@@ -3,6 +3,20 @@
 // WebSocket burada YOK; ağ işi service worker'da (sitelerin CSP'sinden kaçınmak için).
 
 (() => {
+  // Çifte enjeksiyon koruması: onInstalled enjeksiyonu + manifest aynı frame'e
+  // iki kez yüklerse dinleyiciler ikilenmesin
+  if (window.__rveContentYuklendi) return;
+  window.__rveContentYuklendi = true;
+
+  // Rve sitesinin kendi YouTube gömme frame'ine karışma: site zaten IFrame API
+  // ile senkronluyor, eklenti de uygularsa komutlar çifte biner.
+  if (
+    location.hostname === "www.youtube.com" &&
+    location.pathname.startsWith("/embed")
+  ) {
+    return;
+  }
+
   let uzaktanKadar = 0; // bu zamana kadar yerel olayları yayınlama (yankı önleme)
   const uzak = (ms = 1400) => {
     uzaktanKadar = Date.now() + ms;
@@ -53,7 +67,8 @@
 
   function uygula(olay) {
     const v = anaVideo();
-    if (!v) return;
+    // "Tüm sekmeler" modunda alakasız kısa videolara dokunmamak için içerik filtresi
+    if (!v || !icerikMi(v)) return;
     if (olay.tur === "oynat") {
       uzak();
       if (!yakin(v.currentTime, olay.saniye)) v.currentTime = olay.saniye;
@@ -76,13 +91,20 @@
     return true;
   });
 
-  // Sayfa → eklenti köprüsü: Rve sitesi "Eklentiye bağla" derse buradan iletilir.
+  // Sayfa → eklenti köprüsü: Rve sitesi buradan konuşur.
+  //   ping   → pong (site "eklenti kurulu mu" diye yoklar)
+  //   baglan → service worker odaya bağlanır, siteye bagliOk döner
+  //   kapat  → bağlantı kapatılır
   window.addEventListener("message", (e) => {
     if (e.source !== window || !e.data) return;
     const d = e.data;
-    if (d.__rve === "baglan" && typeof d.kod === "string") {
+    if (d.__rve === "ping") {
+      window.postMessage({ __rve: "pong" }, "*");
+    } else if (d.__rve === "baglan" && typeof d.kod === "string") {
+      const kod = d.kod.toUpperCase();
       chrome.runtime
-        .sendMessage({ tip: "rveBaglan", kod: d.kod.toUpperCase() })
+        .sendMessage({ tip: "rveBaglan", kod, hepsi: true })
+        .then(() => window.postMessage({ __rve: "bagliOk", kod }, "*"))
         .catch(() => {});
     } else if (d.__rve === "kapat") {
       chrome.runtime.sendMessage({ tip: "rveKapat" }).catch(() => {});
@@ -91,6 +113,11 @@
 
   // Sayfa açılınca service worker'ı uyandır (varsa önceki bağlantı canlanır)
   chrome.runtime.sendMessage({ tip: "rvePing" }).catch(() => {});
+
+  // Rve sitesi dinliyorsa varlığımızı duyur (ping beklemeden buton çıkar)
+  if (window === window.top) {
+    window.postMessage({ __rve: "pong" }, "*");
+  }
 
   // Video geç yüklenebilir / öğe değişebilir → periyodik yeniden bağla
   setInterval(hookla, 1500);

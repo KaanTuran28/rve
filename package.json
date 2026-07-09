@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "eklenti:zip": "tar -acf public/rve-eklenti.zip -C extension manifest.json background.js content.js popup.html popup.js README.md"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

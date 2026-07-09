@@ -2,6 +2,8 @@
 
 import { memo, useEffect, useState } from "react";
 
+export type EklentiDurumu = "yok" | "var" | "bagli";
+
 interface Props {
   url: string;
   /** Bilinen yayın servisi adı (Netflix vb.) ya da null. Doluysa iframe denenmez. */
@@ -11,6 +13,11 @@ interface Props {
   taban: number;
   /** Oynatma başladığı an (Date.now() ms). */
   ts: number;
+  /** Oda kilitli ve ben sahip değilim: başlat/durdur gizlenir. */
+  kilitli: boolean;
+  /** Rve tarayıcı eklentisi bu sekmede algılandı mı / odaya bağlı mı. */
+  eklenti: EklentiDurumu;
+  onEklentiBaglan: () => void;
   onGeriSayim: () => void;
   onDurdur: () => void;
 }
@@ -30,6 +37,9 @@ function HariciIzleyici({
   oynuyor,
   taban,
   ts,
+  kilitli,
+  eklenti,
+  onEklentiBaglan,
   onGeriSayim,
   onDurdur,
 }: Props) {
@@ -68,20 +78,60 @@ function HariciIzleyici({
           {saat}
         </span>
       </span>
-      <button
-        onClick={onGeriSayim}
-        title="Herkeste 3-2-1 sayacıyla başlat / devam ettir"
-        className="shrink-0 rounded-lg bg-amber px-2.5 py-1 text-xs font-bold text-perde transition hover:brightness-110 active:scale-95"
-      >
-        ▶ 3-2-1
-      </button>
-      <button
-        onClick={onDurdur}
-        title="Herkeste durdur"
-        className="shrink-0 rounded-lg border border-cizgi px-2.5 py-1 text-xs font-semibold text-isik transition hover:border-amber/60 hover:text-amber active:scale-95"
-      >
-        ⏸ Durdur
-      </button>
+      {kilitli ? (
+        <span
+          className="shrink-0 rounded-md bg-kadife px-2 py-0.5 text-[11px] text-soluk"
+          title="Oda kilitli — başlat/durdur sadece oda sahibinde"
+        >
+          🔒 Kontroller sahipte
+        </span>
+      ) : (
+        <>
+          <button
+            onClick={onGeriSayim}
+            title="Herkeste 3-2-1 sayacıyla başlat / devam ettir"
+            className="shrink-0 rounded-lg bg-amber px-2.5 py-1 text-xs font-bold text-perde transition hover:brightness-110 active:scale-95"
+          >
+            ▶ 3-2-1
+          </button>
+          <button
+            onClick={onDurdur}
+            title="Herkeste durdur"
+            className="shrink-0 rounded-lg border border-cizgi px-2.5 py-1 text-xs font-semibold text-isik transition hover:border-amber/60 hover:text-amber active:scale-95"
+          >
+            ⏸ Durdur
+          </button>
+        </>
+      )}
+      {eklenti === "yok" && (
+        <a
+          href="/eklenti"
+          target="_blank"
+          rel="noopener"
+          title="Ücretsiz tarayıcı eklentisiyle oynat/duraklat/sar otomatik senkronlanır — kurulum 1-2 dk"
+          className="shrink-0 rounded-lg border border-dashed border-cizgi px-2.5 py-1 text-xs text-soluk transition hover:border-amber/60 hover:text-amber"
+        >
+          🧩 Eklenti kur
+        </a>
+      )}
+      {eklenti !== "yok" && (
+        <button
+          onClick={onEklentiBaglan}
+          disabled={eklenti === "bagli"}
+          title={
+            eklenti === "bagli"
+              ? "Rve eklentisi bu odaya bağlı — sekmelerdeki video otomatik senkronlanır"
+              : "Rve eklentisini bu odaya bağla: izlediğin sekmedeki video otomatik senkronlanır"
+          }
+          className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+            eklenti === "bagli"
+              ? "border border-canli/50 text-canli"
+              : "border border-amber/60 text-amber hover:bg-amber/10 active:scale-95"
+          }`}
+        >
+          {eklenti === "bagli" ? "🧩 Eklenti bağlı ✓" : "🧩 Eklentiye bağla"}
+        </button>
+      )}
       <a
         href={url}
         target="_blank"

@@ -1,5 +1,12 @@
 export type VideoTipi = "youtube" | "external";
 
+/** Video kuyruğundaki bir öğe (rooms.queue jsonb dizisinin elemanı). */
+export interface KuyrukOgesi {
+  url: string;
+  videoTipi: VideoTipi;
+  etiket: string;
+}
+
 export interface Oda {
   id: string;
   code: string;
@@ -8,6 +15,11 @@ export interface Oda {
   video_type: VideoTipi;
   is_playing: boolean;
   playback_time: number;
+  queue: KuyrukOgesi[];
+  /** Oda kuranın localStorage'ındaki gizli anahtar; eski odalarda null. */
+  owner_token: string | null;
+  /** Kilitliyken kontroller sadece oda sahibinde. */
+  locked: boolean;
   updated_at: string;
   created_at: string;
 }
@@ -27,7 +39,9 @@ export type SenkronOlay =
   | { tur: "duraklat"; saniye: number }
   | { tur: "video"; url: string; videoTipi: VideoTipi }
   | { tur: "geriSayim"; baslatan: string }
-  | { tur: "hariciDurdur"; saniye: number };
+  | { tur: "hariciDurdur"; saniye: number }
+  | { tur: "kuyruk"; kuyruk: KuyrukOgesi[] }
+  | { tur: "kilit"; kilitli: boolean };
 
 export interface OynaticiKontrol {
   oynat(saniye?: number): void;
