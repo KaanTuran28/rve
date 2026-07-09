@@ -15,6 +15,8 @@ interface Props {
   videoId: string;
   baslangicSaniye: number;
   onYerelOlay: (olay: SenkronOlay) => void;
+  /** Video sonuna gelince (kuyruktan sıradakine geçmek için). */
+  onBitti?: () => void;
 }
 
 let apiSozu: Promise<void> | null = null;
@@ -39,7 +41,7 @@ function youtubeApiYukle(): Promise<void> {
 }
 
 const YouTubeOynatici = forwardRef<OynaticiKontrol, Props>(
-  function YouTubeOynatici({ videoId, baslangicSaniye, onYerelOlay }, ref) {
+  function YouTubeOynatici({ videoId, baslangicSaniye, onYerelOlay, onBitti }, ref) {
     const kapRef = useRef<HTMLDivElement>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const oynaticiRef = useRef<any>(null);
@@ -49,6 +51,8 @@ const YouTubeOynatici = forwardRef<OynaticiKontrol, Props>(
     const uzaktanKadarRef = useRef(0);
     const olayRef = useRef(onYerelOlay);
     olayRef.current = onYerelOlay;
+    const bittiRef = useRef(onBitti);
+    bittiRef.current = onBitti;
 
     useEffect(() => {
       let iptal = false;
@@ -76,6 +80,8 @@ const YouTubeOynatici = forwardRef<OynaticiKontrol, Props>(
                 olayRef.current({ tur: "oynat", saniye });
               } else if (olay.data === Durum.PAUSED) {
                 olayRef.current({ tur: "duraklat", saniye });
+              } else if (olay.data === Durum.ENDED) {
+                bittiRef.current?.();
               }
             },
           },

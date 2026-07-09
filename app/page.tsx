@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase, kodUret, takmaAdOku, takmaAdKaydet } from "@/lib/supabase";
+import {
+  supabase,
+  kodUret,
+  takmaAdOku,
+  takmaAdKaydet,
+  sahipAnahtariKaydet,
+} from "@/lib/supabase";
 import KurulumEksik from "@/components/KurulumEksik";
 
 export default function AnaSayfa() {
@@ -33,15 +39,19 @@ export default function AnaSayfa() {
     setMesgul(true);
     setHata("");
     const kod = kodUret();
+    // Sahip anahtarı: sadece kuranın tarayıcısında durur, kilit yetkisi verir
+    const sahipAnahtari = crypto.randomUUID();
     const { error } = await supabase!.from("rooms").insert({
       code: kod,
       name: odaAdi.trim() || `${ad.trim()} film gecesi`,
+      owner_token: sahipAnahtari,
     });
     if (error) {
       setHata("Oda kurulamadı: " + error.message);
       setMesgul(false);
       return;
     }
+    sahipAnahtariKaydet(kod, sahipAnahtari);
     router.push(`/oda/${kod}`);
   }
 
@@ -141,6 +151,14 @@ export default function AnaSayfa() {
       <p className="mt-8 max-w-md text-center text-xs leading-relaxed text-soluk">
         YouTube videoları otomatik senkronize oynar; film siteleri için oda içi
         “3-2-1 senkron” sayacı vardır. Arkadaş ortamı içindir, hesap gerekmez.
+        Netflix ve benzeri sitelerde tam otomatik senkron için{" "}
+        <a
+          href="/eklenti"
+          className="font-semibold text-amber underline-offset-2 hover:underline"
+        >
+          🧩 tarayıcı eklentisini
+        </a>{" "}
+        kurabilirsin.
       </p>
     </main>
   );

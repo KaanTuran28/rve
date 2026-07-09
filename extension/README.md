@@ -22,7 +22,13 @@ sayfadaki oynatıcıyı odanın Supabase kanalına bağlar.
   Yani eklenti tüm sitelerde çalışabilir — arkadaş aracı için uygun ama istersen ileride
   belirli sitelerle sınırlandırılabilir.
 
-## Kurulum (paketlenmemiş / geliştirici modu)
+## Kurulum
+
+**En kolay yol:** `https://rve-ebon.vercel.app/eklenti` — zip'i indir, sayfadaki 3 adımlı
+rehberi izle. Sayfa kurulumu **canlı algılar**: eklenti yüklenir yüklenmez kutu yeşile döner
+(sayfayı yenilemek gerekmez; eklenti kurulunca açık sekmelere kendini enjekte eder).
+
+### Elle (paketlenmemiş / geliştirici modu)
 1. Chrome veya Edge aç.
 2. `chrome://extensions` (Edge'de `edge://extensions`) → **Geliştirici modu**'nu aç.
 3. **Paketlenmemiş öğe yükle** (Load unpacked) → bu `extension/` klasörünü seç.
@@ -40,6 +46,14 @@ sayfadaki oynatıcıyı odanın Supabase kanalına bağlar.
 3. Eklenti simgesi → **oda kodunu** gir → **Bağlan**. Durum "Bağlı: oda XXXX" olur.
 4. Artık biri oynat/duraklat/sar yaptığında herkeste uygulanır.
 5. Bitince **Ayrıl**.
+
+### Kestirme: siteden tek tıkla bağlanma
+Eklenti kuruluysa, Rve odasında harici bir video açıkken üstteki araç çubuğunda
+**🧩 Eklentiye bağla** düğmesi belirir. Tıklayınca eklenti oda koduna otomatik bağlanır —
+popup'a kod girmeye gerek kalmaz. Bu yolda izlenen sekme önceden bilinmediği için komutlar
+**tüm sekmelere** gönderilir; content script yalnızca 30 sn'den uzun (ya da canlı) ana
+videosu olan sayfada uygular, diğer sekmeler komutu yok sayar. Rve'deki **Çıkış** düğmesi
+bu bağlantıyı da kapatır.
 
 ## Test adımları (tek bilgisayarda, iki tarayıcı profili)
 1. Chrome + ikinci profil (veya Chrome + Edge) aç; ikisine de eklentiyi yükle.

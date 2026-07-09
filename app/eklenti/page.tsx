@@ -1,0 +1,190 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
+type Algi = "bekleniyor" | "kuruldu";
+
+export default function EklentiSayfasi() {
+  const [algi, setAlgi] = useState<Algi>("bekleniyor");
+
+  // Eklentinin content script'i ping'e pong döner (kurulunca açık sekmelere de
+  // enjekte edildiği için bu sayfa yenilenmeden yeşile döner)
+  useEffect(() => {
+    const dinle = (e: MessageEvent) => {
+      if (e.source !== window || !e.data || typeof e.data !== "object") return;
+      if (e.data.__rve === "pong" || e.data.__rve === "bagliOk") {
+        setAlgi("kuruldu");
+      }
+    };
+    window.addEventListener("message", dinle);
+    const zaman = setInterval(
+      () => window.postMessage({ __rve: "ping" }, "*"),
+      2000
+    );
+    window.postMessage({ __rve: "ping" }, "*");
+    return () => {
+      window.removeEventListener("message", dinle);
+      clearInterval(zaman);
+    };
+  }, []);
+
+  const adimlar: { baslik: string; detay: React.ReactNode }[] = [
+    {
+      baslik: "Eklentiyi indir ve klasöre çıkar",
+      detay: (
+        <>
+          Yukarıdaki düğmeyle <b className="text-isik">rve-eklenti.zip</b>{" "}
+          dosyasını indir. İnen dosyaya sağ tıklayıp{" "}
+          <b className="text-isik">“Tümünü ayıkla…”</b> de ve bir klasöre çıkar.
+          Bu klasörü silme — eklenti oradan çalışır (Belgeler gibi kalıcı bir
+          yere koy).
+        </>
+      ),
+    },
+    {
+      baslik: "Tarayıcının eklenti sayfasını aç",
+      detay: (
+        <>
+          Adres çubuğuna{" "}
+          <code className="rounded bg-perde px-1.5 py-0.5 text-amber">
+            edge://extensions
+          </code>{" "}
+          (Chrome’da{" "}
+          <code className="rounded bg-perde px-1.5 py-0.5 text-amber">
+            chrome://extensions
+          </code>
+          ) yaz ve Enter’a bas. Köşedeki{" "}
+          <b className="text-isik">Geliştirici modu</b> anahtarını aç.
+        </>
+      ),
+    },
+    {
+      baslik: "“Paketlenmemiş öğe yükle” ile klasörü seç",
+      detay: (
+        <>
+          <b className="text-isik">“Paketlenmemiş öğe yükle”</b> (Load unpacked)
+          düğmesine bas ve 1. adımda çıkardığın klasörü seç. Hepsi bu — bu
+          sayfadaki kutu yeşile dönünce hazırsın demektir.
+        </>
+      ),
+    },
+  ];
+
+  return (
+    <main className="huzme min-h-dvh px-6 py-10">
+      <div className="mx-auto w-full max-w-2xl">
+        <header className="mb-8 flex items-center justify-between">
+          <Link
+            href="/"
+            className="font-display text-2xl font-bold tracking-tight"
+          >
+            Rve<span className="text-amber">.</span>
+          </Link>
+          <Link
+            href="/"
+            className="rounded-lg border border-cizgi px-3 py-1.5 text-xs text-isik transition hover:border-amber/60"
+          >
+            ← Ana sayfa
+          </Link>
+        </header>
+
+        <h1 className="font-display text-3xl font-bold">
+          🧩 Rve Senkron Eklentisi
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-soluk">
+          Netflix ve diğer video sitelerinde <b className="text-isik">otomatik</b>{" "}
+          senkron için küçük bir tarayıcı eklentisi: odadaki biri oynat /
+          duraklat / sar yaptığında herkeste aynı anda uygulanır. Chrome ve Edge
+          ile çalışır; kurulum 1-2 dakika sürer.
+        </p>
+
+        {/* Canlı algılama kutusu */}
+        <div
+          className={`bilet mt-6 flex items-center gap-3 rounded-2xl p-4 ${
+            algi === "kuruldu" ? "bg-canli/10" : "bg-koltuk"
+          }`}
+        >
+          {algi === "kuruldu" ? (
+            <>
+              <span className="text-2xl">✅</span>
+              <div>
+                <p className="text-sm font-bold text-canli">
+                  Eklenti kurulu — hazırsın!
+                </p>
+                <p className="mt-0.5 text-xs text-soluk">
+                  Artık odada harici bir video açıkken üstteki{" "}
+                  <b className="text-isik">🧩 Eklentiye bağla</b> düğmesine
+                  basman yeterli.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="nabiz text-2xl">🔎</span>
+              <div>
+                <p className="text-sm font-bold text-isik">
+                  Eklenti henüz algılanmadı
+                </p>
+                <p className="mt-0.5 text-xs text-soluk">
+                  Aşağıdaki üç adımı tamamla — kurulum biter bitmez bu kutu
+                  kendiliğinden yeşile döner.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* İndirme */}
+        <a
+          href="/rve-eklenti.zip"
+          download
+          className="mt-6 block w-full rounded-xl bg-amber py-3.5 text-center font-display text-base font-bold text-perde transition hover:brightness-110 active:scale-[0.99]"
+        >
+          ⬇ Eklentiyi indir (rve-eklenti.zip)
+        </a>
+
+        {/* Adımlar */}
+        <ol className="mt-8 space-y-4">
+          {adimlar.map((a, i) => (
+            <li
+              key={a.baslik}
+              className="bilet flex gap-4 rounded-2xl bg-koltuk p-5"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber/15 font-display text-sm font-bold text-amber">
+                {i + 1}
+              </span>
+              <div>
+                <p className="font-display text-sm font-bold">{a.baslik}</p>
+                <p className="mt-1 text-xs leading-relaxed text-soluk">
+                  {a.detay}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
+
+        <div className="mt-8 space-y-2 text-xs leading-relaxed text-soluk">
+          <p>
+            <b className="text-isik">Nasıl kullanılır?</b> Odanda Netflix gibi
+            bir adres açtığında üst şeritte{" "}
+            <b className="text-isik">🧩 Eklentiye bağla</b> düğmesi belirir —
+            tek tık, kod girmek yok. Sonra herkes filmi kendi sekmesinde açar;
+            oynat/duraklat/sar otomatik senkronlanır.
+          </p>
+          <p>
+            <b className="text-isik">Güncelleme gerekirse:</b> yeni zip’i indir,
+            aynı klasörün üzerine çıkar ve eklenti sayfasındaki{" "}
+            <b className="text-isik">⟳ yenile</b> okuna bas.
+          </p>
+          <p>
+            <b className="text-isik">Güvenlik notu:</b> eklenti yalnızca
+            sayfadaki videoyu oynat/duraklat/sar komutlarıyla yönetir ve sadece
+            senin gireceğin oda koduna bağlanır; şifre, çerez ya da kişisel veri
+            okumaz.
+          </p>
+        </div>
+      </div>
+    </main>
+  );
+}

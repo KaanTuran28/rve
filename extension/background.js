@@ -10,6 +10,9 @@ const ANON =
 let ws = null;
 let kod = null;
 let tabId = null;
+// Rve sitesindeki "Eklentiye bağla" ile bağlanınca izlenen sekme bilinmez:
+// komutlar tüm sekmelere gönderilir (content script uygun videoyu kendisi seçer)
+let hepsi = false;
 let aktif = false;
 let refSayac = 1;
 let hb = null;
@@ -78,12 +81,13 @@ function bildir() {
     .catch(() => {});
 }
 
-function baglan(yeniKod, yeniTab) {
+function baglan(yeniKod, yeniTab, yeniHepsi) {
   kapat(false);
   kod = yeniKod;
   tabId = yeniTab;
+  hepsi = !!yeniHepsi;
   aktif = true;
-  chrome.storage.local.set({ kod, tabId, aktif });
+  chrome.storage.local.set({ kod, tabId, hepsi, aktif });
 
   ws = new WebSocket(
     `${SUPABASE_URL}/realtime/v1/websocket?apikey=${ANON}&vsn=1.0.0`
@@ -104,10 +108,23 @@ function baglan(yeniKod, yeniTab) {
       return;
     }
     if (m.event === "broadcast" && m.payload && m.payload.event === "senkron") {
-      if (tabId != null) {
+      const olay = m.payload.payload;
+      if (!hepsi && tabId != null) {
         chrome.tabs
-          .sendMessage(tabId, { tip: "rveUygula", olay: m.payload.payload })
+          .sendMessage(tabId, { tip: "rveUygula", olay })
           .catch(() => {});
+      } else if (hepsi) {
+        // Hedef sekme bilinmiyor: hepsine dağıt; content script'ler uygun
+        // (30 sn üstü / canlı) videosu olmayan sayfalarda komutu yok sayar
+        chrome.tabs.query({}, (sekmeler) => {
+          for (const s of sekmeler) {
+            if (s.id != null) {
+              chrome.tabs
+                .sendMessage(s.id, { tip: "rveUygula", olay })
+                .catch(() => {});
+            }
+          }
+        });
       }
     }
   };
@@ -138,9 +155,9 @@ function kapat(kalici = true) {
 
 chrome.runtime.onMessage.addListener((msg, sender, yanit) => {
   if (msg.tip === "rveBaglan") {
-    // Popup tabId verir; content script köprüsünden gelince gönderenin sekmesi
+    // Popup tabId verir; site köprüsünden gelince (hepsi=true) tüm sekmeler hedeflenir
     const hedefTab = msg.tabId != null ? msg.tabId : sender.tab && sender.tab.id;
-    baglan(msg.kod, hedefTab);
+    baglan(msg.kod, hedefTab, msg.hepsi);
     yanit({ ok: true });
   } else if (msg.tip === "rveKapat") {
     kapat(true);
@@ -156,7 +173,23 @@ chrome.runtime.onMessage.addListener((msg, sender, yanit) => {
   return true; // asenkron yanıt için kanalı açık tut
 });
 
+// Kurulur kurulmaz zaten açık olan sekmelere content script'i enjekte et:
+// kullanıcı /eklenti sayfasını ya da film sekmesini yenilemek zorunda kalmasın
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.tabs.query({}, (sekmeler) => {
+    for (const s of sekmeler) {
+      if (s.id == null || !s.url || !/^https?:/.test(s.url)) continue;
+      chrome.scripting
+        .executeScript({
+          target: { tabId: s.id, allFrames: true },
+          files: ["content.js"],
+        })
+        .catch(() => {});
+    }
+  });
+});
+
 // Service worker yeniden başlarsa önceki bağlantıyı geri kur
-chrome.storage.local.get(["kod", "tabId", "aktif"]).then((s) => {
-  if (s.aktif && s.kod) baglan(s.kod, s.tabId);
+chrome.storage.local.get(["kod", "tabId", "hepsi", "aktif"]).then((s) => {
+  if (s.aktif && s.kod) baglan(s.kod, s.tabId, s.hepsi);
 });

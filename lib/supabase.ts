@@ -66,5 +66,40 @@ export function takmaAdOku(): string {
 }
 
 export function takmaAdKaydet(ad: string) {
-  localStorage.setItem(NICK_ANAHTARI, ad.trim());
+  // '#' presence kimliğinde ad/rastgele-ek ayracı olarak kullanılıyor
+  localStorage.setItem(NICK_ANAHTARI, ad.replace(/#/g, "").trim());
+}
+
+/** Presence kimliğinden (ad#rastgele) görünen adı çıkarır. */
+export function kimliktenAd(kimlik: string): string {
+  return kimlik.split("#")[0];
+}
+
+const SAHIP_ONEKI = "rve_sahip_";
+
+/** Oda kurulurken üretilen sahip anahtarını bu tarayıcıda saklar. */
+export function sahipAnahtariKaydet(kod: string, anahtar: string) {
+  try {
+    localStorage.setItem(SAHIP_ONEKI + kod.toUpperCase(), anahtar);
+  } catch {}
+}
+
+export function sahipAnahtariOku(kod: string): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(SAHIP_ONEKI + kod.toUpperCase());
+}
+
+/** YouTube oEmbed'den video başlığını dener; olmazsa null (kuyruk etiketi için). */
+export async function videoBasligi(url: string): Promise<string | null> {
+  try {
+    const yanit = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+      { signal: AbortSignal.timeout(2500) }
+    );
+    if (!yanit.ok) return null;
+    const veri = await yanit.json();
+    return typeof veri.title === "string" ? veri.title : null;
+  } catch {
+    return null;
+  }
 }
