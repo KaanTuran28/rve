@@ -28,6 +28,25 @@ create table if not exists messages (
 
 create index if not exists messages_room_idx on messages (room_id, created_at);
 
+-- Veri hijyeni: RLS herkese açık olduğundan doğrudan REST kötüye kullanımına
+-- karşı en azından boyut/biçim sınırları (migration: rve_veri_kisitlari)
+alter table messages
+  add constraint messages_content_uzunluk check (char_length(content) between 1 and 500),
+  add constraint messages_nickname_uzunluk check (char_length(nickname) between 1 and 40);
+alter table rooms
+  add constraint rooms_name_uzunluk check (char_length(name) between 1 and 80),
+  add constraint rooms_code_uzunluk check (char_length(code) between 4 and 12),
+  add constraint rooms_video_url_bicim check (
+    video_url is null
+    or (char_length(video_url) <= 2048 and video_url ~* '^https?://')
+  ),
+  add constraint rooms_queue_boyut check (
+    jsonb_typeof(queue) = 'array' and jsonb_array_length(queue) <= 50
+  ),
+  add constraint rooms_playback_araligi check (
+    playback_time >= 0 and playback_time < 360000
+  );
+
 -- Kimlik doğrulama yok (arkadaş ortamı): anon anahtarla okuma/yazma serbest.
 alter table rooms enable row level security;
 alter table messages enable row level security;
