@@ -51,6 +51,12 @@ export default function OdaSayfasi() {
   const [videoGirdi, setVideoGirdi] = useState("");
   const [kopyalandi, setKopyalandi] = useState(false);
   const [gecikmeUyarisi, setGecikmeUyarisi] = useState(false);
+  // Video üstünde kısa "kim ne yaptı" bildirimi ("kaan duraklattı ⏸")
+  const [bildirim, setBildirim] = useState<string | null>(null);
+  // Sohbette "X yazıyor…" göstergesi
+  const [yazanlar, setYazanlar] = useState<string[]>([]);
+  // iPhone Safari element tam ekranı desteklemez; düğme gizlenir
+  const [tamEkranVar, setTamEkranVar] = useState(true);
   // Tarayıcı eklentisi bu sekmede var mı / odaya bağlı mı
   const [eklenti, setEklenti] = useState<EklentiDurumu>("yok");
   // Kanal koptuğunda artırılır; kanal efekti yeniden kurulur
@@ -87,12 +93,60 @@ export default function OdaSayfasi() {
   const odaIdRef = useRef<string | null>(null);
   const baslangicSaniyeRef = useRef(0);
   const baglantiZamaniRef = useRef(0);
+  const adRef = useRef(ad);
+  adRef.current = ad;
+  const bildirimZamanRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const yazanSonaErmeRef = useRef<Map<string, number>>(new Map());
+  const sonYaziyorRef = useRef(0);
 
   // Takma adı ve sahip anahtarını yükle
   useEffect(() => {
     setAd(takmaAdOku());
     setSahipAnahtari(sahipAnahtariOku(odaKodu));
+    const belge = document as Document & { webkitFullscreenEnabled?: boolean };
+    setTamEkranVar(!!(document.fullscreenEnabled || belge.webkitFullscreenEnabled));
   }, [odaKodu]);
+
+  // Video üstünde 2.6 sn görünen bildirim
+  const bildirimGoster = useCallback((metin: string) => {
+    setBildirim(metin);
+    if (bildirimZamanRef.current) clearTimeout(bildirimZamanRef.current);
+    bildirimZamanRef.current = setTimeout(() => setBildirim(null), 2600);
+  }, []);
+
+  // "X yazıyor…" — gelen sinyali 3 sn tut, süresi dolanları ayıkla
+  const yazanEkle = useCallback((yazan: string) => {
+    yazanSonaErmeRef.current.set(yazan, Date.now() + 3000);
+    setYazanlar([...yazanSonaErmeRef.current.keys()]);
+  }, []);
+
+  useEffect(() => {
+    if (yazanlar.length === 0) return;
+    const zaman = setInterval(() => {
+      const simdi = Date.now();
+      let degisti = false;
+      for (const [kisi, sure] of yazanSonaErmeRef.current) {
+        if (sure < simdi) {
+          yazanSonaErmeRef.current.delete(kisi);
+          degisti = true;
+        }
+      }
+      if (degisti) setYazanlar([...yazanSonaErmeRef.current.keys()]);
+    }, 1000);
+    return () => clearInterval(zaman);
+  }, [yazanlar.length]);
+
+  // Yazarken en fazla 2 sn'de bir yayınla
+  const yaziyorBildir = useCallback(() => {
+    const simdi = Date.now();
+    if (simdi - sonYaziyorRef.current < 2000) return;
+    sonYaziyorRef.current = simdi;
+    kanalRef.current?.send({
+      type: "broadcast",
+      event: "yaziyor",
+      payload: { ad: adRef.current },
+    });
+  }, []);
 
   // Yükleme 8 saniyeyi aşarsa ipucu göster
   useEffect(() => {
@@ -171,9 +225,17 @@ export default function OdaSayfasi() {
     (olay: SenkronOlay) => {
       if (olay.tur === "oynat") {
         oynaticiRef.current?.oynat(olay.saniye);
+        if (olay.kim) bildirimGoster(`▶ ${olay.kim} oynattı`);
       } else if (olay.tur === "duraklat") {
         oynaticiRef.current?.duraklat(olay.saniye);
+        if (olay.kim) bildirimGoster(`⏸ ${olay.kim} duraklattı`);
       } else if (olay.tur === "video") {
+        // kim yoksa kuyruk otomatik geçişidir (videoBitti kazananı yayınlar)
+        bildirimGoster(
+          olay.kim
+            ? `🎬 ${olay.kim} yeni video açtı`
+            : "🎬 Sıradaki videoya geçildi"
+        );
         baslangicSaniyeRef.current = 0;
         setHSaat({ oynuyor: false, taban: 0, ts: 0 });
         setOda((onceki) =>
@@ -190,12 +252,14 @@ export default function OdaSayfasi() {
       } else if (olay.tur === "geriSayim") {
         setGeriSayimBaslatan(olay.baslatan);
       } else if (olay.tur === "hariciDurdur") {
+        if (olay.kim) bildirimGoster(`⏸ ${olay.kim} durdurdu`);
         setHSaat({
           oynuyor: false,
           taban: Math.max(0, olay.saniye),
           ts: Date.now(),
         });
       } else if (olay.tur === "kuyruk") {
+        if (olay.kim) bildirimGoster(`🎞 ${olay.kim} sırayı güncelledi`);
         setOda((onceki) =>
           onceki ? { ...onceki, queue: olay.kuyruk } : onceki
         );
@@ -203,6 +267,7 @@ export default function OdaSayfasi() {
         setOda((onceki) =>
           onceki ? { ...onceki, locked: olay.kilitli } : onceki
         );
+        bildirimGoster(olay.kilitli ? "🔒 Oda kilitlendi" : "🔓 Kilit açıldı");
         sistemMesaji(
           olay.kilitli
             ? "Oda sahibi kontrolleri kilitledi 🔒"
@@ -210,7 +275,7 @@ export default function OdaSayfasi() {
         );
       }
     },
-    [sistemMesaji]
+    [sistemMesaji, bildirimGoster]
   );
 
   // Odanın güncel halini DB'den çekip yerel durumu hizalar.
@@ -277,6 +342,10 @@ export default function OdaSayfasi() {
       .on("broadcast", { event: "mesaj" }, ({ payload }) =>
         setMesajlar((m) => [...m, payload as Mesaj])
       )
+      .on("broadcast", { event: "yaziyor" }, ({ payload }) => {
+        const yazan = (payload as { ad?: string })?.ad;
+        if (yazan && yazan !== adRef.current) yazanEkle(yazan);
+      })
       .on("presence", { event: "sync" }, () =>
         setKatilimcilar(Object.keys(kanal.presenceState()).sort())
       )
@@ -321,6 +390,7 @@ export default function OdaSayfasi() {
     odaKodu,
     olayIsle,
     sistemMesaji,
+    yazanEkle,
     baglantiSurumu,
     durumTazele,
   ]);
@@ -430,10 +500,15 @@ export default function OdaSayfasi() {
     ) {
       return;
     }
+    // Karşı tarafta "kim yaptı" bildirimi çıksın diye ad iliştirilir
+    const yayin =
+      olay.tur === "oynat" || olay.tur === "duraklat"
+        ? { ...olay, kim: adRef.current }
+        : olay;
     kanalRef.current?.send({
       type: "broadcast",
       event: "senkron",
-      payload: olay,
+      payload: yayin,
     });
     if (
       (olay.tur === "oynat" || olay.tur === "duraklat") &&
@@ -452,19 +527,31 @@ export default function OdaSayfasi() {
     }
   }, []);
 
+  // Girdiyi güvenli bir URL'ye çözer; http(s) dışı her şeyde null (javascript: vb.)
   function girdiCozumle(girdi: string): {
     url: string;
     videoTipi: VideoTipi;
     ytId: string | null;
-  } {
+  } | null {
     const ytId = youtubeIdAyikla(girdi);
-    const videoTipi: VideoTipi = ytId ? "youtube" : "external";
-    const url = ytId
-      ? girdi
-      : girdi.startsWith("http")
-        ? girdi
-        : `https://${girdi}`;
-    return { url, videoTipi, ytId };
+    if (ytId) {
+      // Kanonik biçim: DB'deki http(s) kısıtına da uyar (çıplak ID girilebilir)
+      return {
+        url: `https://www.youtube.com/watch?v=${ytId}`,
+        videoTipi: "youtube",
+        ytId,
+      };
+    }
+    const ham = girdi.startsWith("http") ? girdi : `https://${girdi}`;
+    try {
+      const cozulen = new URL(ham);
+      if (cozulen.protocol !== "http:" && cozulen.protocol !== "https:") {
+        return null;
+      }
+      return { url: cozulen.href, videoTipi: "external", ytId: null };
+    } catch {
+      return null;
+    }
   }
 
   // Videoyu değiştirip kuyruğu yazar: yerel durum + broadcast + DB tek yerden
@@ -488,8 +575,9 @@ export default function OdaSayfasi() {
     kanalRef.current?.send({
       type: "broadcast",
       event: "senkron",
-      payload: { tur: "video", url, videoTipi },
+      payload: { tur: "video", url, videoTipi, kim: adRef.current },
     });
+    // kuyruk yayınında kim yok: bildirim video olayından çıkıyor, ikilenmesin
     kanalRef.current?.send({
       type: "broadcast",
       event: "senkron",
@@ -511,9 +599,13 @@ export default function OdaSayfasi() {
   async function videoDegistir() {
     const girdi = videoGirdi.trim();
     if (!girdi || !oda || !supabase || kilitli) return;
-    const { url, videoTipi } = girdiCozumle(girdi);
+    const sonuc = girdiCozumle(girdi);
+    if (!sonuc) {
+      bildirimGoster("⚠️ Geçersiz adres — bir http(s) bağlantısı yapıştır");
+      return;
+    }
     setVideoGirdi("");
-    await videoyuUygula(url, videoTipi, oda.queue ?? []);
+    await videoyuUygula(sonuc.url, sonuc.videoTipi, oda.queue ?? []);
   }
 
   // Kuyruğu yerel + broadcast + DB olarak yazar
@@ -524,7 +616,7 @@ export default function OdaSayfasi() {
     kanalRef.current?.send({
       type: "broadcast",
       event: "senkron",
-      payload: { tur: "kuyruk", kuyruk: yeniKuyruk },
+      payload: { tur: "kuyruk", kuyruk: yeniKuyruk, kim: adRef.current },
     });
     await supabase
       .from("rooms")
@@ -535,7 +627,12 @@ export default function OdaSayfasi() {
   async function kuyrugaEkle() {
     const girdi = videoGirdi.trim();
     if (!girdi || !oda || !supabase || kilitli) return;
-    const { url, videoTipi, ytId } = girdiCozumle(girdi);
+    const sonuc = girdiCozumle(girdi);
+    if (!sonuc) {
+      bildirimGoster("⚠️ Geçersiz adres — bir http(s) bağlantısı yapıştır");
+      return;
+    }
+    const { url, videoTipi, ytId } = sonuc;
     setVideoGirdi("");
     let etiket: string;
     if (ytId) {
@@ -599,6 +696,7 @@ export default function OdaSayfasi() {
     baslangicSaniyeRef.current = 0;
     setHSaat({ oynuyor: false, taban: 0, ts: 0 });
     setOda(data[0] as Oda);
+    bildirimGoster("🎬 Sıradaki videoya geçildi");
     kanalRef.current?.send({
       type: "broadcast",
       event: "senkron",
@@ -609,7 +707,7 @@ export default function OdaSayfasi() {
       event: "senkron",
       payload: { tur: "kuyruk", kuyruk: kalan },
     });
-  }, []);
+  }, [bildirimGoster]);
 
   // Oda sahibi kilidi aç/kapat
   async function kilidiDegistir() {
@@ -677,7 +775,7 @@ export default function OdaSayfasi() {
     kanalRef.current?.send({
       type: "broadcast",
       event: "senkron",
-      payload: { tur: "hariciDurdur", saniye: konum },
+      payload: { tur: "hariciDurdur", saniye: konum, kim: adRef.current },
     });
     if (supabase && odaIdRef.current) {
       supabase
@@ -798,7 +896,7 @@ export default function OdaSayfasi() {
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="flex items-center gap-3 border-b border-cizgi bg-koltuk px-4 py-2.5">
+      <header className="flex items-center gap-2 border-b border-cizgi bg-koltuk px-3 py-2.5 sm:gap-3 sm:px-4">
         <Link
           href="/"
           className="font-display text-lg font-bold tracking-tight"
@@ -808,11 +906,11 @@ export default function OdaSayfasi() {
         <span className="hidden truncate text-sm text-soluk sm:block">
           {oda?.name}
         </span>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
           {sahibim && (
             <button
               onClick={kilidiDegistir}
-              className={`rounded-lg border px-3 py-1.5 text-xs transition ${
+              className={`rounded-lg border px-2 py-1.5 text-xs transition sm:px-3 ${
                 oda?.locked
                   ? "border-amber/60 text-amber"
                   : "border-cizgi text-isik hover:border-amber/60"
@@ -823,12 +921,15 @@ export default function OdaSayfasi() {
                   : "Kilitle: videoyu sadece sen kontrol et"
               }
             >
-              {oda?.locked ? "🔒 Kilitli" : "🔓 Serbest"}
+              {oda?.locked ? "🔒" : "🔓"}
+              <span className="hidden sm:inline">
+                {oda?.locked ? " Kilitli" : " Serbest"}
+              </span>
             </button>
           )}
           {!sahibim && oda?.locked && (
             <span
-              className="rounded-lg bg-kadife px-2.5 py-1.5 text-xs text-soluk"
+              className="rounded-lg bg-kadife px-2 py-1.5 text-xs text-soluk sm:px-2.5"
               title="Oda kilitli: video kontrolleri oda sahibinde"
             >
               🔒
@@ -836,28 +937,33 @@ export default function OdaSayfasi() {
           )}
           <button
             onClick={davetKopyala}
-            className="rounded-lg border border-dashed border-amber/50 px-3 py-1.5 font-display text-xs font-semibold tracking-[0.25em] text-amber transition hover:bg-amber/10"
+            className="rounded-lg border border-dashed border-amber/50 px-2 py-1.5 font-display text-xs font-semibold tracking-[0.2em] text-amber transition hover:bg-amber/10 sm:px-3 sm:tracking-[0.25em]"
             title="Davet linkini kopyala"
           >
-            {kopyalandi ? "KOPYALANDI ✓" : odaKodu}
+            {kopyalandi ? "✓" : odaKodu}
           </button>
           <button
             onClick={() => setSinemaModu((s) => !s)}
-            className="rounded-lg border border-cizgi px-3 py-1.5 text-xs text-isik transition hover:border-amber/60"
-            title="Sohbeti gizle/göster"
+            className="rounded-lg border border-cizgi px-2 py-1.5 text-xs text-isik transition hover:border-amber/60 sm:px-3"
+            title={sinemaModu ? "Sohbeti göster" : "Sinema modu: sohbeti gizle"}
           >
-            {sinemaModu ? "Sohbeti göster" : "Sinema modu"}
+            <span className="sm:hidden">{sinemaModu ? "💬" : "🎬"}</span>
+            <span className="hidden sm:inline">
+              {sinemaModu ? "Sohbeti göster" : "Sinema modu"}
+            </span>
           </button>
-          <button
-            onClick={tamEkran}
-            className="rounded-lg border border-cizgi px-3 py-1.5 text-xs text-isik transition hover:border-amber/60"
-            title="Tam ekran"
-          >
-            ⛶ Tam ekran
-          </button>
+          {tamEkranVar && (
+            <button
+              onClick={tamEkran}
+              className="rounded-lg border border-cizgi px-2 py-1.5 text-xs text-isik transition hover:border-amber/60 sm:px-3"
+              title="Tam ekran"
+            >
+              ⛶<span className="hidden sm:inline"> Tam ekran</span>
+            </button>
+          )}
           <button
             onClick={cikisYap}
-            className="rounded-lg border border-cizgi px-3 py-1.5 text-xs text-soluk transition hover:border-red-500/60 hover:text-red-400"
+            className="rounded-lg border border-cizgi px-2 py-1.5 text-xs text-soluk transition hover:border-red-500/60 hover:text-red-400 sm:px-3"
             title="Odadan ayrıl (son kişiysen oda silinir)"
           >
             Çıkış
@@ -905,6 +1011,11 @@ export default function OdaSayfasi() {
             )}
             {geriSayimBaslatan && (
               <GeriSayim baslatan={geriSayimBaslatan} onBitti={geriSayimBitti} />
+            )}
+            {bildirim && (
+              <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-koltuk/90 px-3 py-1.5 text-xs font-medium text-isik shadow-lg backdrop-blur-sm">
+                {bildirim}
+              </div>
             )}
           </div>
 
@@ -991,6 +1102,8 @@ export default function OdaSayfasi() {
             <Sohbet
               mesajlar={mesajlar}
               benimAdim={ad}
+              yazanlar={yazanlar}
+              onYaziyor={yaziyorBildir}
               onGonder={mesajGonder}
             />
           </aside>

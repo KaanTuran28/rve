@@ -43,6 +43,9 @@ function HariciIzleyici({
   onGeriSayim,
   onDurdur,
 }: Props) {
+  // DB'ye doğrudan yazılmış olabilecek javascript:/data: gibi adresleri asla
+  // iframe/bağlantı olarak render etme
+  const guvenliUrl = /^https?:\/\//i.test(url);
   const [saat, setSaat] = useState(() =>
     bicimle(oynuyor ? taban + (Date.now() - ts) / 1000 : taban)
   );
@@ -132,14 +135,16 @@ function HariciIzleyici({
           {eklenti === "bagli" ? "🧩 Eklenti bağlı ✓" : "🧩 Eklentiye bağla"}
         </button>
       )}
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="shrink-0 rounded-lg border border-cizgi px-2.5 py-1 text-xs font-medium text-isik transition hover:border-amber/60 hover:text-amber"
-      >
-        Sekmede aç ↗
-      </a>
+      {guvenliUrl && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 rounded-lg border border-cizgi px-2.5 py-1 text-xs font-medium text-isik transition hover:border-amber/60 hover:text-amber"
+        >
+          Sekmede aç ↗
+        </a>
+      )}
     </div>
   );
 
@@ -164,13 +169,22 @@ function HariciIzleyici({
   return (
     <div className="flex h-full w-full flex-col">
       {arac}
-      <iframe
-        src={url}
-        className="w-full flex-1 bg-black"
-        allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-        allowFullScreen
-        referrerPolicy="no-referrer"
-      />
+      {guvenliUrl ? (
+        <iframe
+          src={url}
+          className="w-full flex-1 bg-black"
+          allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+          allowFullScreen
+          referrerPolicy="no-referrer"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
+        />
+      ) : (
+        <div className="huzme flex flex-1 items-center justify-center p-6">
+          <p className="max-w-xs text-center text-sm text-soluk">
+            Bu adres güvenli görünmüyor (http/https değil) — gömülmedi.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

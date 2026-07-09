@@ -34,13 +34,15 @@ export interface Mesaj {
   sistem?: boolean;
 }
 
+/** `kim`: olayı yapan kişinin takma adı — karşı tarafta "kaan duraklattı" bildirimi
+ * için. Eklentiden gelen olaylarda bulunmaz (bildirim gösterilmez). */
 export type SenkronOlay =
-  | { tur: "oynat"; saniye: number }
-  | { tur: "duraklat"; saniye: number }
-  | { tur: "video"; url: string; videoTipi: VideoTipi }
+  | { tur: "oynat"; saniye: number; kim?: string }
+  | { tur: "duraklat"; saniye: number; kim?: string }
+  | { tur: "video"; url: string; videoTipi: VideoTipi; kim?: string }
   | { tur: "geriSayim"; baslatan: string }
-  | { tur: "hariciDurdur"; saniye: number }
-  | { tur: "kuyruk"; kuyruk: KuyrukOgesi[] }
+  | { tur: "hariciDurdur"; saniye: number; kim?: string }
+  | { tur: "kuyruk"; kuyruk: KuyrukOgesi[]; kim?: string }
   | { tur: "kilit"; kilitli: boolean };
 
 export interface OynaticiKontrol {

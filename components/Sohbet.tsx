@@ -6,6 +6,10 @@ import type { Mesaj } from "@/lib/types";
 interface Props {
   mesajlar: Mesaj[];
   benimAdim: string;
+  /** Şu anda mesaj yazan diğer katılımcıların adları. */
+  yazanlar: string[];
+  /** Kullanıcı yazarken çağrılır (üst bileşen throttle'layıp yayınlar). */
+  onYaziyor: () => void;
   onGonder: (metin: string) => void;
 }
 
@@ -22,7 +26,13 @@ function saat(iso: string): string {
   });
 }
 
-export default function Sohbet({ mesajlar, benimAdim, onGonder }: Props) {
+export default function Sohbet({
+  mesajlar,
+  benimAdim,
+  yazanlar,
+  onYaziyor,
+  onGonder,
+}: Props) {
   const [metin, setMetin] = useState("");
   const listeRef = useRef<HTMLDivElement>(null);
 
@@ -78,10 +88,18 @@ export default function Sohbet({ mesajlar, benimAdim, onGonder }: Props) {
           )
         )}
       </div>
+      {yazanlar.length > 0 && (
+        <p className="truncate px-3 pb-1 text-[11px] italic text-soluk">
+          ✏️ {yazanlar.join(", ")} yazıyor…
+        </p>
+      )}
       <div className="flex gap-2 border-t border-cizgi p-3">
         <input
           value={metin}
-          onChange={(e) => setMetin(e.target.value)}
+          onChange={(e) => {
+            setMetin(e.target.value);
+            if (e.target.value) onYaziyor();
+          }}
           onKeyDown={(e) => e.key === "Enter" && gonder()}
           placeholder="Mesaj yaz…"
           maxLength={500}
