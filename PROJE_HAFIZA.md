@@ -5,7 +5,12 @@
 ## Proje nedir?
 rave.io benzeri, web'de çalışan, ticari olmayan "birlikte izleme" uygulaması. Arkadaş ortamı için: oda kur → kodu paylaş → senkronize YouTube izle + sohbet et. Film siteleri (ör. hdfilmcehennemi) için iframe + "3-2-1 senkron sayacı" yaklaşımı var. Kullanıcı: kaanturan627@gmail.com, Türkçe arayüz istendi.
 
-## Durum (2026-07-11, 17. tur)
+## Durum (2026-07-11, 18. tur)
+- ✅ **18. tur (2026-07-11): 🪟 Yüzen sohbet — Document Picture-in-Picture mini penceresi.**
+  - Kullanıcı 17. tur sonrası "yazılar her koşulda geliyor ama baloncuk gelmiyor" dedi; site-içi tam ekranda tıklanabilir sayfa-içi katman Chromium'da imkânsız olduğundan (17. tur dersi) çözüm **ayrı her-zaman-üstte pencere**: header'da `🪟 Yüzen sohbet` düğmesi (`components/YuzenSohbet.tsx`) → `documentPictureInPicture.requestWindow({340×330})`; içine `createPortal` ile son 60 mesaj (sistem/silindi dahil) + yazma satırı render edilir; ana belgedeki stil sayfaları (Tailwind) pencereye kopyalanır. Pencere sitenin/YouTube'un KENDİ tam ekranının da üstünde kalır ve gerçek tıklama alır. Düğme API yoksa (Firefox/Safari/mobil) hiç görünmez; ikinci tıklama/✕ kapatır (`pagehide` → state sıfır); oda sayfasından çıkınca pencere kapanır. Yabancı tam ekran ipucu metnine "ya da tam ekrandan önce 🪟 Yüzen sohbet'i aç" eklendi.
+  - **Doğrulama:** build temiz; E2E 10/10 (PiP ayrı sayfa hedefi olarak açıldı; A'nın mesajı PiP'te; PiP'ten yazılan A'ya; site-içi tam ekranda PiP'ten yazılan hem A'ya ulaştı hem B'nin danmaku'sunda aktı; düğmeyle kapandı) + 17. tur takımı 18/18 regresyonsuz. Headless Edge'de bile `requestWindow` çalışıyor (Playwright'ta `context.waitForEvent("page")` ile yakalanır).
+
+## Önceki durum (2026-07-11, 17. tur)
 - ✅ **17. tur (2026-07-11): sitenin KENDİ tam ekranında kayan mesajlar (`584ab2b` pushlandı, canlıda doğrulandı).** NOT: bu commit'in ilk Vercel build'i klonlamadan hemen sonra logsuz "Error" verdi (platform hıçkırığı) — `npx vercel redeploy <deploy-url>` çözdü; alias otomatik güncellendi.
   - **Sorun:** Harici site iframe'inde kullanıcılar sitenin oynatıcısındaki ⛶'e basıyor (bizim ⛶ site sayfasını çerçevesiyle gösteriyor, videoyu değil). O zaman `fullscreenElement` = iframe olur; sahne içindeki baloncuk/kayanlar iframe'in altında kalıp görünmüyordu.
   - **Çözüm — tam ekran türü ayrımı (`tamEkranTuru: null|'sahne'|'yabanci'`):**
