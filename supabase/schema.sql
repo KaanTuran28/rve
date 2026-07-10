@@ -14,6 +14,8 @@ create table if not exists rooms (
   -- Oda sahibi kilidi: token oda kuranın localStorage'ında saklanır (auth yok)
   owner_token text,
   locked boolean not null default false,
+  -- Oda sahibinin susturduğu takma adlar (sohbete yazamazlar)
+  muted jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
@@ -23,6 +25,8 @@ create table if not exists messages (
   room_id uuid not null references rooms (id) on delete cascade,
   nickname text not null,
   content text not null,
+  -- Mesaj sonradan düzenlendiyse dolu
+  edited_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -45,6 +49,9 @@ alter table rooms
   ),
   add constraint rooms_playback_araligi check (
     playback_time >= 0 and playback_time < 360000
+  ),
+  add constraint rooms_muted_boyut check (
+    jsonb_typeof(muted) = 'array' and jsonb_array_length(muted) <= 100
   );
 
 -- Kimlik doğrulama yok (arkadaş ortamı): anon anahtarla okuma/yazma serbest.
@@ -57,6 +64,9 @@ create policy "rooms_update" on rooms for update using (true);
 create policy "rooms_delete" on rooms for delete using (true);
 create policy "messages_select" on messages for select using (true);
 create policy "messages_insert" on messages for insert with check (true);
+-- Kendi mesajını silme/düzenleme (auth yok; sahiplik kontrolü istemcide)
+create policy "messages_update" on messages for update using (true);
+create policy "messages_delete" on messages for delete using (true);
 
 -- Yetim oda temizliği: 24 saattir güncellenmeyen odaları saatte bir sil.
 -- (Son üyenin tarayıcısı çökerse pagehide tetiklenmez; bu job artıkları toplar.)

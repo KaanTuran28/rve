@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import "./globals.css";
 
@@ -16,6 +16,17 @@ export const metadata: Metadata = {
   title: "Rve — Birlikte İzle",
   description:
     "Arkadaşlarınla senkronize video gecesi: oda kur, kodu paylaş, aynı anda izleyin.",
+  applicationName: "Rve",
+  // iOS "ana ekrana ekle" tam ekran açılış
+  appleWebApp: {
+    capable: true,
+    title: "Rve",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0d0b10",
 };
 
 export default function RootLayout({

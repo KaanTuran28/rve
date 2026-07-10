@@ -5,8 +5,43 @@ import Link from "next/link";
 
 type Algi = "bekleniyor" | "kuruldu";
 
+// Desteklenen popüler tarayıcılar (hepsi Chromium tabanlı — aynı zip çalışır)
+const tarayicilar = [
+  {
+    ad: "Chrome",
+    adEkli: "Chrome’da",
+    simge: "🟡",
+    adres: "chrome://extensions",
+    modYeri: "sağ üst köşedeki",
+  },
+  {
+    ad: "Edge",
+    adEkli: "Edge’de",
+    simge: "🔵",
+    adres: "edge://extensions",
+    modYeri: "sol menüdeki",
+  },
+  {
+    ad: "Opera",
+    adEkli: "Opera’da",
+    simge: "🔴",
+    adres: "opera://extensions",
+    modYeri: "sağ üst köşedeki",
+  },
+  {
+    ad: "Brave",
+    adEkli: "Brave’de",
+    simge: "🦁",
+    adres: "brave://extensions",
+    modYeri: "sağ üst köşedeki",
+  },
+] as const;
+
 export default function EklentiSayfasi() {
   const [algi, setAlgi] = useState<Algi>("bekleniyor");
+  const [tarayici, setTarayici] = useState<(typeof tarayicilar)[number]>(
+    tarayicilar[0]
+  );
 
   // Eklentinin content script'i ping'e pong döner (kurulunca açık sekmelere de
   // enjekte edildiği için bu sayfa yenilenmeden yeşile döner)
@@ -43,18 +78,14 @@ export default function EklentiSayfasi() {
       ),
     },
     {
-      baslik: "Tarayıcının eklenti sayfasını aç",
+      baslik: `${tarayici.adEkli} eklenti sayfasını aç`,
       detay: (
         <>
           Adres çubuğuna{" "}
           <code className="rounded bg-perde px-1.5 py-0.5 text-amber">
-            edge://extensions
+            {tarayici.adres}
           </code>{" "}
-          (Chrome’da{" "}
-          <code className="rounded bg-perde px-1.5 py-0.5 text-amber">
-            chrome://extensions
-          </code>
-          ) yaz ve Enter’a bas. Köşedeki{" "}
+          yaz ve Enter’a bas. {tarayici.modYeri}{" "}
           <b className="text-isik">Geliştirici modu</b> anahtarını aç.
         </>
       ),
@@ -95,9 +126,32 @@ export default function EklentiSayfasi() {
         <p className="mt-2 text-sm leading-relaxed text-soluk">
           Netflix ve diğer video sitelerinde <b className="text-isik">otomatik</b>{" "}
           senkron için küçük bir tarayıcı eklentisi: odadaki biri oynat /
-          duraklat / sar yaptığında herkeste aynı anda uygulanır. Chrome ve Edge
-          ile çalışır; kurulum 1-2 dakika sürer.
+          duraklat / sar yaptığında herkeste aynı anda uygulanır. Chrome, Edge,
+          Opera ve Brave ile çalışır (Firefox henüz desteklenmiyor); kurulum 1-2
+          dakika sürer.
         </p>
+
+        {/* Tarayıcı seçici: adımlar seçime göre uyarlanır */}
+        <div className="mt-6">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-soluk">
+            Tarayıcını seç
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {tarayicilar.map((t) => (
+              <button
+                key={t.ad}
+                onClick={() => setTarayici(t)}
+                className={`rounded-lg border px-3.5 py-2 text-sm font-semibold transition ${
+                  tarayici.ad === t.ad
+                    ? "border-amber/70 bg-amber/10 text-amber"
+                    : "border-cizgi text-isik hover:border-amber/50"
+                }`}
+              >
+                {t.simge} {t.ad}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Canlı algılama kutusu */}
         <div
@@ -113,9 +167,9 @@ export default function EklentiSayfasi() {
                   Eklenti kurulu — hazırsın!
                 </p>
                 <p className="mt-0.5 text-xs text-soluk">
-                  Artık odada harici bir video açıkken üstteki{" "}
+                  Artık odada video açıkken film panelindeki{" "}
                   <b className="text-isik">🧩 Eklentiye bağla</b> düğmesine
-                  basman yeterli.
+                  basman yeterli — kod otomatik girilir.
                 </p>
               </div>
             </>
@@ -166,11 +220,13 @@ export default function EklentiSayfasi() {
 
         <div className="mt-8 space-y-2 text-xs leading-relaxed text-soluk">
           <p>
-            <b className="text-isik">Nasıl kullanılır?</b> Odanda Netflix gibi
-            bir adres açtığında üst şeritte{" "}
-            <b className="text-isik">🧩 Eklentiye bağla</b> düğmesi belirir —
-            tek tık, kod girmek yok. Sonra herkes filmi kendi sekmesinde açar;
-            oynat/duraklat/sar otomatik senkronlanır.
+            <b className="text-isik">Nasıl kullanılır?</b> Odada bir video
+            açıkken film panelinde eklenti durumu her zaman görünür:{" "}
+            <b className="text-isik">🧩 Eklentiye bağla</b>’ya tek tık — oda
+            kodu otomatik girilir, bağlanınca{" "}
+            <b className="text-isik">🧩 Eklenti bağlı ✓</b> olur. Sonra herkes
+            filmi kendi sekmesinde açar; oynat/duraklat/sar otomatik
+            senkronlanır.
           </p>
           <p>
             <b className="text-isik">Güncelleme gerekirse:</b> yeni zip’i indir,

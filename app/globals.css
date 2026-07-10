@@ -67,6 +67,23 @@ body {
   animation: rakam 1s ease-out both;
 }
 
+/* tam ekranda sağdan sola kayan sohbet mesajı (danmaku) */
+@keyframes kayan-mesaj {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(-100vw - 100%)); }
+}
+.kayan-mesaj {
+  position: absolute;
+  left: 100%;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: kayan-mesaj 9s linear forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* animasyonsuz: mesaj ekran dışında kalır, zamanlayıcı listeden düşürür */
+  .kayan-mesaj { animation: none; visibility: hidden; }
+}
+
 /* film taneciği: hafif doku, ekranı canlı tutar */
 .tanecik::after {
   content: "";
