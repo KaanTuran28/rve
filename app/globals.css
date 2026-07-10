@@ -56,17 +56,6 @@ body {
   animation: nabiz 1.6s ease-in-out infinite;
 }
 
-/* geri sayım rakamı */
-@keyframes rakam {
-  0% { transform: scale(1.6); opacity: 0; }
-  25% { transform: scale(1); opacity: 1; }
-  85% { opacity: 1; }
-  100% { transform: scale(0.92); opacity: 0; }
-}
-.rakam {
-  animation: rakam 1s ease-out both;
-}
-
 /* tam ekranda sağdan sola kayan sohbet mesajı (danmaku) */
 @keyframes kayan-mesaj {
   from { transform: translateX(0); }
@@ -107,7 +96,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nabiz, .rakam { animation: none; }
+  .nabiz { animation: none; }
 }
 
 /* ince kaydırma çubuğu */

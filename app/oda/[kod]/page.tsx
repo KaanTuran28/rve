@@ -32,7 +32,6 @@ import Sohbet from "@/components/Sohbet";
 import MesajBaloncugu from "@/components/MesajBaloncugu";
 import YuzenSohbet from "@/components/YuzenSohbet";
 import Katilimcilar from "@/components/Katilimcilar";
-import GeriSayim from "@/components/GeriSayim";
 import KurulumEksik from "@/components/KurulumEksik";
 
 type Durum = "yukleniyor" | "bulunamadi" | "hazir";
@@ -48,9 +47,6 @@ export default function OdaSayfasi() {
   const [adTaslak, setAdTaslak] = useState("");
   const [mesajlar, setMesajlar] = useState<Mesaj[]>([]);
   const [katilimcilar, setKatilimcilar] = useState<string[]>([]);
-  const [geriSayimBaslatan, setGeriSayimBaslatan] = useState<string | null>(
-    null
-  );
   const [sinemaModu, setSinemaModu] = useState(false);
   // Sinema modunda (sohbet gizliyken) gelen mesaj sayısı — düğmede rozet
   const [okunmamis, setOkunmamis] = useState(0);
@@ -87,13 +83,6 @@ export default function OdaSayfasi() {
   const [baglantiSurumu, setBaglantiSurumu] = useState(0);
   // Oda sahibi anahtarı (sadece oda kuranın tarayıcısında bulunur)
   const [sahipAnahtari, setSahipAnahtari] = useState<string | null>(null);
-  // Harici (Netflix vb.) ortak senkron saati: oynuyorsa gecen = taban + (now - ts)
-  const [hSaat, setHSaat] = useState<{
-    oynuyor: boolean;
-    taban: number;
-    ts: number;
-  }>({ oynuyor: false, taban: 0, ts: 0 });
-
   // Presence kimliği: aynı takma adla girenler çakışmasın diye rastgele ek
   const kimlik = useMemo(
     () => (ad ? `${ad}#${Math.random().toString(36).slice(2, 6)}` : ""),
@@ -107,8 +96,6 @@ export default function OdaSayfasi() {
   const susturuldum = !sahibim && !!ad && (oda?.muted ?? []).includes(ad);
 
   const kanalRef = useRef<RealtimeChannel | null>(null);
-  const hSaatRef = useRef(hSaat);
-  hSaatRef.current = hSaat;
   const odaRef = useRef(oda);
   odaRef.current = oda;
   const kilitliRef = useRef(kilitli);
@@ -272,18 +259,6 @@ export default function OdaSayfasi() {
       baslangicTsRef.current = Date.now();
       otomatikBaslatRef.current = odaVerisi.is_playing;
       odaIdRef.current = odaVerisi.id;
-      // Harici içerik için ortak saati oda kaydından türet (geç gelen senkron kalır)
-      if (odaVerisi.video_type === "external") {
-        let gecen = odaVerisi.playback_time;
-        if (odaVerisi.is_playing) {
-          gecen += (Date.now() - Date.parse(odaVerisi.updated_at)) / 1000;
-        }
-        setHSaat({
-          oynuyor: odaVerisi.is_playing,
-          taban: Math.max(0, gecen),
-          ts: Date.now(),
-        });
-      }
       setOda(odaVerisi);
       setDurum("hazir");
 
@@ -333,7 +308,6 @@ export default function OdaSayfasi() {
         );
         baslangicSaniyeRef.current = 0;
         otomatikBaslatRef.current = false;
-        setHSaat({ oynuyor: false, taban: 0, ts: 0 });
         setOda((onceki) =>
           onceki
             ? {
@@ -345,15 +319,6 @@ export default function OdaSayfasi() {
               }
             : onceki
         );
-      } else if (olay.tur === "geriSayim") {
-        setGeriSayimBaslatan(olay.baslatan);
-      } else if (olay.tur === "hariciDurdur") {
-        if (olay.kim) bildirimGoster(`⏸ ${olay.kim} durdurdu`);
-        setHSaat({
-          oynuyor: false,
-          taban: Math.max(0, olay.saniye),
-          ts: Date.now(),
-        });
       } else if (olay.tur === "kuyruk") {
         if (olay.kim) bildirimGoster(`🎞 ${olay.kim} sırayı güncelledi`);
         setOda((onceki) =>
@@ -404,15 +369,7 @@ export default function OdaSayfasi() {
     const oncekiUrl = odaRef.current?.video_url ?? null;
     setOda(guncel);
     if (guncel.video_type === "external") {
-      let gecen = guncel.playback_time;
-      if (guncel.is_playing) {
-        gecen += (Date.now() - Date.parse(guncel.updated_at)) / 1000;
-      }
-      setHSaat({
-        oynuyor: guncel.is_playing,
-        taban: Math.max(0, gecen),
-        ts: Date.now(),
-      });
+      // Harici modda hizalanacak oynatıcı yok (senkron eklentiyle)
     } else if (guncel.video_url !== oncekiUrl) {
       baslangicSaniyeRef.current = 0;
       otomatikBaslatRef.current = false;
@@ -711,7 +668,6 @@ export default function OdaSayfasi() {
     if (!mevcut || !supabase) return;
     baslangicSaniyeRef.current = 0;
     otomatikBaslatRef.current = false;
-    setHSaat({ oynuyor: false, taban: 0, ts: 0 });
     setOda({
       ...mevcut,
       video_url: url,
@@ -843,7 +799,6 @@ export default function OdaSayfasi() {
     if (!data || data.length === 0) return; // başka bir katılımcı geçti
     baslangicSaniyeRef.current = 0;
     otomatikBaslatRef.current = false;
-    setHSaat({ oynuyor: false, taban: 0, ts: 0 });
     setOda(data[0] as Oda);
     bildirimGoster("🎬 Sıradaki videoya geçildi");
     kanalRef.current?.send({
@@ -943,61 +898,6 @@ export default function OdaSayfasi() {
     });
     await supabase.from("rooms").update({ muted: yeni }).eq("id", mevcut.id);
   }
-
-  const geriSayimBaslat = useCallback(() => {
-    if (kilitliRef.current) return;
-    kanalRef.current?.send({
-      type: "broadcast",
-      event: "senkron",
-      payload: { tur: "geriSayim", baslatan: ad },
-    });
-    // broadcast self kapalı: yerelde elle başlat
-    setGeriSayimBaslatan(ad);
-  }, [ad]);
-
-  // 3-2-1 bitince harici saati başlat/devam ettir; başlatan kişi kalıcı duruma yazar
-  const geriSayimBitti = useCallback(() => {
-    setHSaat((s) => ({ oynuyor: true, taban: s.taban, ts: Date.now() }));
-    if (geriSayimBaslatan === ad && supabase && odaIdRef.current) {
-      supabase
-        .from("rooms")
-        .update({
-          is_playing: true,
-          playback_time: hSaatRef.current.taban,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", odaIdRef.current)
-        .then(() => {});
-    }
-    setGeriSayimBaslatan(null);
-  }, [geriSayimBaslatan, ad]);
-
-  // Harici içeriği herkeste durdur (saat dondurulur + kalıcı duruma yazılır)
-  const hariciDurdur = useCallback(() => {
-    if (kilitliRef.current) return;
-    const s = hSaatRef.current;
-    const konum = Math.max(
-      0,
-      s.oynuyor ? s.taban + (Date.now() - s.ts) / 1000 : s.taban
-    );
-    setHSaat({ oynuyor: false, taban: konum, ts: Date.now() });
-    kanalRef.current?.send({
-      type: "broadcast",
-      event: "senkron",
-      payload: { tur: "hariciDurdur", saniye: konum, kim: adRef.current },
-    });
-    if (supabase && odaIdRef.current) {
-      supabase
-        .from("rooms")
-        .update({
-          is_playing: false,
-          playback_time: konum,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", odaIdRef.current)
-        .then(() => {});
-    }
-  }, []);
 
   // Odanın kalıcı durumunu okuyup kendi oynatıcını herkese hizalar
   async function senkronla() {
@@ -1195,6 +1095,7 @@ export default function OdaSayfasi() {
             benimAdim={ad}
             susturuldum={susturuldum}
             onGonder={mesajGonder}
+            onDesteksiz={bildirimGoster}
           />
           {tamEkranVar && (
             <button
@@ -1222,15 +1123,9 @@ export default function OdaSayfasi() {
               url={oda.video_url}
               videoTipi={oda.video_type}
               servis={yayinServisi(oda.video_url)}
-              oynuyor={hSaat.oynuyor}
-              taban={hSaat.taban}
-              ts={hSaat.ts}
-              kilitli={kilitli}
               eklenti={eklenti}
               onEklentiBaglan={eklentiyeBaglan}
               onEklentiKapat={eklentiKapat}
-              onGeriSayim={geriSayimBaslat}
-              onDurdur={hariciDurdur}
             />
           )}
           <div ref={sahneRef} className="relative min-h-0 flex-1 bg-black">
@@ -1264,9 +1159,6 @@ export default function OdaSayfasi() {
                   odadaki herkeste aynı anda açılır.
                 </p>
               </div>
-            )}
-            {geriSayimBaslatan && (
-              <GeriSayim baslatan={geriSayimBaslatan} onBitti={geriSayimBitti} />
             )}
             {bildirim && (
               <div className="pointer-events-none absolute bottom-3 left-3 z-10 rounded-lg bg-koltuk/90 px-3 py-1.5 text-xs font-medium text-isik shadow-lg backdrop-blur-sm">
