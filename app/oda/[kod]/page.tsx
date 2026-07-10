@@ -30,6 +30,7 @@ import HariciIzleyici from "@/components/HariciIzleyici";
 import FilmPaneli from "@/components/FilmPaneli";
 import Sohbet from "@/components/Sohbet";
 import MesajBaloncugu from "@/components/MesajBaloncugu";
+import YuzenSohbet from "@/components/YuzenSohbet";
 import Katilimcilar from "@/components/Katilimcilar";
 import GeriSayim from "@/components/GeriSayim";
 import KurulumEksik from "@/components/KurulumEksik";
@@ -1189,6 +1190,12 @@ export default function OdaSayfasi() {
               </span>
             )}
           </button>
+          <YuzenSohbet
+            mesajlar={mesajlar}
+            benimAdim={ad}
+            susturuldum={susturuldum}
+            onGonder={mesajGonder}
+          />
           {tamEkranVar && (
             <button
               onClick={tamEkran}
@@ -1282,7 +1289,8 @@ export default function OdaSayfasi() {
               {tamEkranTuru === "yabanci" && fsIpucu && (
                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-perde/80 px-4 py-2 text-sm text-isik shadow-lg backdrop-blur-sm">
                   💬 Sohbet mesajları burada akar — yazmak için{" "}
-                  <b className="text-amber">Esc</b>
+                  <b className="text-amber">Esc</b>, ya da tam ekrandan önce{" "}
+                  <b className="text-amber">🪟 Yüzen sohbet</b>&apos;i aç
                 </div>
               )}
             </div>
