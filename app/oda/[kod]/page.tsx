@@ -29,6 +29,7 @@ import YouTubeOynatici from "@/components/YouTubeOynatici";
 import HariciIzleyici from "@/components/HariciIzleyici";
 import FilmPaneli from "@/components/FilmPaneli";
 import Sohbet from "@/components/Sohbet";
+import MesajBaloncugu from "@/components/MesajBaloncugu";
 import Katilimcilar from "@/components/Katilimcilar";
 import GeriSayim from "@/components/GeriSayim";
 import KurulumEksik from "@/components/KurulumEksik";
@@ -61,11 +62,9 @@ export default function OdaSayfasi() {
   const [yazanlar, setYazanlar] = useState<string[]>([]);
   // iPhone Safari element tam ekranı desteklemez; düğme gizlenir
   const [tamEkranVar, setTamEkranVar] = useState(true);
-  // Sahne şu anda tam ekranda mı — gelen mesajlar video üstünde kayar
+  // Sahne şu anda tam ekranda mı — gelen mesajlar video üstünde kayar,
+  // 💬 baloncuğu görünür (MesajBaloncugu; tam ekrandan çıkınca unmount olur)
   const [tamEkranda, setTamEkranda] = useState(false);
-  // Tam ekranda 💬 baloncuğuna basınca açılan mini mesaj kutusu
-  const [balonAcik, setBalonAcik] = useState(false);
-  const [balonMetin, setBalonMetin] = useState("");
   // Tam ekranda video üstünde kayan mesajlar (danmaku)
   const [kayanlar, setKayanlar] = useState<
     { id: string; ad: string; metin: string; serit: number }[]
@@ -135,11 +134,7 @@ export default function OdaSayfasi() {
 
   // Tam ekran durumunu izle (Esc ile de çıkılabildiği için olaydan dinlenir)
   useEffect(() => {
-    const degisti = () => {
-      const aktif = !!document.fullscreenElement;
-      setTamEkranda(aktif);
-      if (!aktif) setBalonAcik(false);
-    };
+    const degisti = () => setTamEkranda(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", degisti);
     return () => document.removeEventListener("fullscreenchange", degisti);
   }, []);
@@ -415,8 +410,12 @@ export default function OdaSayfasi() {
         kayanEkle(gelen.nickname, gelen.content);
       })
       .on("broadcast", { event: "mesajSil" }, ({ payload }) => {
-        const { id } = payload as { id: string };
-        setMesajlar((m) => m.filter((x) => x.id !== id));
+        const { id, deleted_at } = payload as { id: string; deleted_at: string };
+        setMesajlar((m) =>
+          m.map((x) =>
+            x.id === id ? { ...x, content: "silindi", deleted_at } : x
+          )
+        );
       })
       .on("broadcast", { event: "mesajDuzenle" }, ({ payload }) => {
         const yeni = payload as Pick<Mesaj, "id" | "content" | "edited_at">;
@@ -839,16 +838,22 @@ export default function OdaSayfasi() {
     kayanEkle(ad, metin);
   }
 
-  // Kendi mesajını sil: DB'den kaldır + herkese duyur
+  // Kendi mesajını sil: içerik temizlenir, yerinde "silindi" izi kalır
   async function mesajSil(id: string) {
     if (!supabase) return;
-    setMesajlar((m) => m.filter((x) => x.id !== id));
+    const deleted_at = new Date().toISOString();
+    setMesajlar((m) =>
+      m.map((x) => (x.id === id ? { ...x, content: "silindi", deleted_at } : x))
+    );
     kanalRef.current?.send({
       type: "broadcast",
       event: "mesajSil",
-      payload: { id },
+      payload: { id, deleted_at },
     });
-    await supabase.from("messages").delete().eq("id", id);
+    await supabase
+      .from("messages")
+      .update({ content: "silindi", deleted_at })
+      .eq("id", id);
   }
 
   // Kendi mesajını düzenle: içerik + düzenlendi damgası
@@ -867,14 +872,6 @@ export default function OdaSayfasi() {
       .from("messages")
       .update({ content: metin, edited_at })
       .eq("id", id);
-  }
-
-  // Tam ekran baloncuğundan mesaj gönder (kutu açık kalır, art arda yazılabilir)
-  function balonGonder() {
-    const temiz = balonMetin.trim();
-    if (!temiz) return;
-    setBalonMetin("");
-    mesajGonder(temiz);
   }
 
   // Oda sahibi: kişiyi sustur / susturmayı kaldır (takma ada göre)
@@ -1213,49 +1210,9 @@ export default function OdaSayfasi() {
                   <span className="ml-2">{k.metin}</span>
                 </div>
               ))}
-            {tamEkranda &&
-              (balonAcik ? (
-                <div className="absolute bottom-16 right-3 z-30 flex w-80 max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full bg-koltuk/95 p-1.5 shadow-xl backdrop-blur-sm">
-                  <input
-                    value={balonMetin}
-                    onChange={(e) => setBalonMetin(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") balonGonder();
-                      if (e.key === "Escape") setBalonAcik(false);
-                    }}
-                    disabled={susturuldum}
-                    placeholder={
-                      susturuldum ? "🔇 Susturuldun" : "Mesaj yaz…"
-                    }
-                    maxLength={500}
-                    autoFocus
-                    className="min-w-0 flex-1 rounded-full border border-cizgi bg-perde px-3.5 py-2 text-sm outline-none placeholder:text-soluk/60 focus:border-amber/60 disabled:opacity-60"
-                  />
-                  <button
-                    onClick={balonGonder}
-                    disabled={susturuldum}
-                    title="Gönder"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber text-sm font-bold text-perde transition hover:brightness-110 active:scale-95 disabled:opacity-50"
-                  >
-                    ➤
-                  </button>
-                  <button
-                    onClick={() => setBalonAcik(false)}
-                    title="Kapat"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-cizgi text-sm text-soluk transition hover:border-amber/60 hover:text-amber active:scale-95"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setBalonAcik(true)}
-                  title="Tam ekrandan çıkmadan mesaj yaz"
-                  className="absolute bottom-16 right-3 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-amber text-xl shadow-xl transition hover:brightness-110 active:scale-95"
-                >
-                  💬
-                </button>
-              ))}
+            {tamEkranda && (
+              <MesajBaloncugu susturuldum={susturuldum} onGonder={mesajGonder} />
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2 border-t border-cizgi bg-koltuk p-3">

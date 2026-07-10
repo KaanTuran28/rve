@@ -37,6 +37,8 @@ export interface Mesaj {
   created_at: string;
   /** Mesaj sonradan düzenlendiyse dolu ("(düzenlendi)" işareti için). */
   edited_at?: string | null;
+  /** Mesaj silindiyse dolu — yerinde "silindi" izi gösterilir. */
+  deleted_at?: string | null;
   /** Sadece yerelde üretilen "katıldı/ayrıldı" bildirimleri için. */
   sistem?: boolean;
 }

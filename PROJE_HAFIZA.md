@@ -5,7 +5,14 @@
 ## Proje nedir?
 rave.io benzeri, web'de çalışan, ticari olmayan "birlikte izleme" uygulaması. Arkadaş ortamı için: oda kur → kodu paylaş → senkronize YouTube izle + sohbet et. Film siteleri (ör. hdfilmcehennemi) için iframe + "3-2-1 senkron sayacı" yaklaşımı var. Kullanıcı: kaanturan627@gmail.com, Türkçe arayüz istendi.
 
-## Durum (2026-07-10, 15. tur)
+## Durum (2026-07-10, 16. tur)
+- ✅ **16. tur (2026-07-10): "silindi" izi + taşınabilir baloncuk + Android rehberi.**
+  1. **Silinen mesaj izi:** silme artık sert değil — `messages.deleted_at` (migration `rve_mesaj_silindi_isareti`), içerik `"silindi"` ile değiştirilir; yerinde italik "🗑 Bu mesaj silindi" görünür (düğmeler + "(düzenlendi)" gizlenir), yenilemede de kalır. `mesajSil` broadcast payload'ı `{id, deleted_at}`.
+  2. **Taşınabilir 💬 baloncuğu:** `components/MesajBaloncugu.tsx` — pointer olaylarıyla sürükleme (8px eşik: altı dokunuş sayılır, kutuyu açar), konum `rve_balon_konum` localStorage'da; kutu açıkken ⠿ kulpundan taşınır. **İki kritik ders:** (a) sürükleme sırasında `fixed inset-0` görünmez KALKAN katmanı şart — pointer capture cross-origin YouTube iframe'ine karşı yetmiyor, imleç iframe'e girince olaylar oraya gidiyor; (b) dokunuşta tarayıcının gecikmeli ürettiği click, aynı noktada yeni açılan kutunun ✕'ine denk gelip kapatıyor (hayalet tıklama) → `pointerdown`'da `preventDefault` + açılıştan sonra 350ms kapat/gönder yok sayılır.
+  3. **Android rehberi:** `/eklenti`'ye "📱 Telefondan mı geldin?" kartı — Kiwi/Lemur Browser ile zip'ten kurulum 3 adım + iPhone/iPad'de mümkün değil notu.
+  - **Doğrulama:** build temiz; E2E 20/20 (sil→iz her iki tarafta+yenilemede, düzenle regresyonsuz; masaüstünde fareyle sürükle→taşındı→tık yeni yerde kutu→localStorage çık-gir hatırlama; mobil dokunuşla kutu açılıp mesaj gitti; rehber bölümü + 390px taşma 0). NOT: dev sunucusu uzun oturumda HMR bozulması yaşadı ("Unexpected token }" + chunk kaybı) — kaynak hatası değildi, dev'i yeniden başlatmak çözdü.
+
+## Önceki durum (2026-07-10, 15. tur)
 - ✅ **15. tur (2026-07-10): responsive tarama + tam ekran mesaj baloncuğu.**
   1. **Tam ekran 💬 baloncuğu:** tam ekrandayken sağ altta (bottom-16 right-3, YT kontrollerinin üstünde) amber 💬 düğmesi; basınca mini hap kutu: yuvarlak input + ➤ gönder + ✕ kapat. Enter/➤ gönderir, kutu açık kalır (art arda mesaj); Esc/✕ kapatır; tam ekrandan çıkınca `balonAcik` sıfırlanır (fullscreenchange). Susturulmuşsa input disabled "🔇 Susturuldun". Gönderilen mesaj `mesajGonder` yolundan geçtiği için danmaku olarak da akar.
   2. **Responsive düzeltme:** alt video çubuğu `flex-wrap`; input mobilde `basis-full` (tam satır), `sm:basis-0` ile masaüstünde eski tek satır. Önceki halinde 360px'te input sıfıra iniyordu.
