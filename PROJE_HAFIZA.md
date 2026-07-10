@@ -5,7 +5,14 @@
 ## Proje nedir?
 rave.io benzeri, web'de çalışan, ticari olmayan "birlikte izleme" uygulaması. Arkadaş ortamı için: oda kur → kodu paylaş → senkronize YouTube izle + sohbet et. Film siteleri (ör. hdfilmcehennemi) için iframe + "3-2-1 senkron sayacı" yaklaşımı var. Kullanıcı: kaanturan627@gmail.com, Türkçe arayüz istendi.
 
-## Durum (2026-07-10, 14. tur)
+## Durum (2026-07-10, 15. tur)
+- ✅ **15. tur (2026-07-10): responsive tarama + tam ekran mesaj baloncuğu.**
+  1. **Tam ekran 💬 baloncuğu:** tam ekrandayken sağ altta (bottom-16 right-3, YT kontrollerinin üstünde) amber 💬 düğmesi; basınca mini hap kutu: yuvarlak input + ➤ gönder + ✕ kapat. Enter/➤ gönderir, kutu açık kalır (art arda mesaj); Esc/✕ kapatır; tam ekrandan çıkınca `balonAcik` sıfırlanır (fullscreenchange). Susturulmuşsa input disabled "🔇 Susturuldun". Gönderilen mesaj `mesajGonder` yolundan geçtiği için danmaku olarak da akar.
+  2. **Responsive düzeltme:** alt video çubuğu `flex-wrap`; input mobilde `basis-full` (tam satır), `sm:basis-0` ile masaüstünde eski tek satır. Önceki halinde 360px'te input sıfıra iniyordu.
+  - **Doğrulama:** build temiz; E2E 20/20 — oda 360/390/414/768/820 + ana sayfa & /eklenti 360/390/768 yatay taşma 0; mobil (390px dokunmatik) tam ekran: baloncuk→kutu→gönder→A'ya ulaştı→kendi danmaku'su aktı→kutu açık kaldı→✕ ile baloncuğa döndü→tam ekrandan çıkınca kayboldu; danmaku akarken taşma 0. 360px ekran görüntüsüyle giriş satırı ferahlığı onaylandı.
+  - **Mobil eklenti notu:** iOS'ta imkânsız (Safari yalnızca App Store eklentileri); Android'de Kiwi/Lemur gibi zip yükleyebilen Chromium tarayıcılarla mümkün — kullanıcıya anlatıldı, sitede değişiklik yapılmadı.
+
+## Önceki durum (2026-07-10, 14. tur)
 - ✅ **14. tur (2026-07-10): Vercel taşındı + eklenti çipi aç/kapa + net mesaj düğmeleri.**
   - **⚠️ YENİ CANLI ADRES: `https://rve-kappa.vercel.app`** — kullanıcı eski Vercel projesini sildi (11-13. tur push'u sonrası alan adı eski dağıtıma sabitlenmişti; muhtemel Instant Rollback, promote izni kullanıcıdan çıkmadı) ve GitHub'dan sıfırdan import etti (team `t-x`, proje `rve`, env değişkenleri yeniden girildi). Yeni adres yeni sürümü sunuyor, otomatik dağıtım çalışıyor. `rve-ebon.vercel.app` artık YOK.
   - **Eklenti çipi aç/kapa:** "🧩 Eklenti bağlı ✓" artık disabled değil — tıklayınca `{__rve:'kapat'}` postMessage + `setEklenti("var")` (`eklentiKapat`, FilmPaneli `onEklentiKapat`). Eklenti tarafı zaten destekliyordu (content.js kapat → SW rveKapat → WS kapanır), eklenti dosyası değişmedi.
