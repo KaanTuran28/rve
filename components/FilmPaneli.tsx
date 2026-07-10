@@ -16,6 +16,8 @@ interface Props {
   kilitli: boolean;
   eklenti: EklentiDurumu;
   onEklentiBaglan: () => void;
+  /** Bağlıyken çipe tekrar basınca bağlantıyı keser. */
+  onEklentiKapat: () => void;
   onGeriSayim: () => void;
   onDurdur: () => void;
 }
@@ -41,6 +43,7 @@ function FilmPaneli({
   kilitli,
   eklenti,
   onEklentiBaglan,
+  onEklentiKapat,
   onGeriSayim,
   onDurdur,
 }: Props) {
@@ -131,17 +134,16 @@ function FilmPaneli({
         </a>
       ) : (
         <button
-          onClick={onEklentiBaglan}
-          disabled={eklenti === "bagli"}
+          onClick={eklenti === "bagli" ? onEklentiKapat : onEklentiBaglan}
           title={
             eklenti === "bagli"
-              ? "Rve eklentisi bu odaya bağlı — sekmelerdeki video otomatik senkronlanır"
+              ? "Eklenti bu odaya bağlı — bağlantıyı kesmek için tıkla"
               : "Eklenti kurulu ama bağlı değil — tıkla, oda kodu otomatik girilir ve bağlanır"
           }
-          className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+          className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition active:scale-95 ${
             eklenti === "bagli"
-              ? "border border-canli/50 text-canli"
-              : "border border-amber/60 text-amber hover:bg-amber/10 active:scale-95"
+              ? "border border-canli/50 text-canli hover:bg-canli/10"
+              : "border border-amber/60 text-amber hover:bg-amber/10"
           }`}
         >
           {eklenti === "bagli" ? "🧩 Eklenti bağlı ✓" : "🧩 Eklentiye bağla"}

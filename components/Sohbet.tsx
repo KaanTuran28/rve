@@ -84,47 +84,49 @@ export default function Sohbet({
               {mesaj.content}
             </p>
           ) : (
-          <div key={mesaj.id} className="group text-sm leading-snug">
-            <span
-              className="font-semibold"
-              style={{
-                color:
-                  mesaj.nickname === benimAdim
-                    ? "var(--color-amber)"
-                    : adRengi(mesaj.nickname),
-              }}
-            >
-              {mesaj.nickname}
-            </span>
-            <span className="ml-2 text-[10px] text-soluk">
-              {saat(mesaj.created_at)}
-            </span>
-            {mesaj.edited_at && (
-              <span className="ml-1.5 text-[10px] italic text-soluk">
-                (düzenlendi)
+          <div key={mesaj.id} className="text-sm leading-snug">
+            <div className="flex items-baseline gap-2">
+              <span
+                className="min-w-0 truncate font-semibold"
+                style={{
+                  color:
+                    mesaj.nickname === benimAdim
+                      ? "var(--color-amber)"
+                      : adRengi(mesaj.nickname),
+                }}
+              >
+                {mesaj.nickname}
               </span>
-            )}
-            {mesaj.nickname === benimAdim && duzenlenenId !== mesaj.id && (
-              <span className="ml-2 inline-flex gap-1.5 align-middle sm:opacity-0 sm:transition sm:group-hover:opacity-100">
-                <button
-                  onClick={() => {
-                    setDuzenlenenId(mesaj.id);
-                    setDuzenlemeMetni(mesaj.content);
-                  }}
-                  title="Mesajı düzenle"
-                  className="text-[11px] text-soluk transition hover:text-amber"
-                >
-                  ✏️
-                </button>
-                <button
-                  onClick={() => onSil(mesaj.id)}
-                  title="Mesajı sil"
-                  className="text-[11px] text-soluk transition hover:text-red-400"
-                >
-                  🗑
-                </button>
+              <span className="shrink-0 text-[10px] text-soluk">
+                {saat(mesaj.created_at)}
               </span>
-            )}
+              {mesaj.edited_at && (
+                <span className="shrink-0 text-[10px] italic text-soluk">
+                  (düzenlendi)
+                </span>
+              )}
+              {mesaj.nickname === benimAdim && duzenlenenId !== mesaj.id && (
+                <span className="ml-auto flex shrink-0 gap-1">
+                  <button
+                    onClick={() => {
+                      setDuzenlenenId(mesaj.id);
+                      setDuzenlemeMetni(mesaj.content);
+                    }}
+                    title="Mesajı düzenle"
+                    className="rounded-md border border-cizgi px-1.5 py-0.5 text-[10px] font-medium text-soluk transition hover:border-amber/60 hover:text-amber active:scale-95"
+                  >
+                    ✏️ Düzenle
+                  </button>
+                  <button
+                    onClick={() => onSil(mesaj.id)}
+                    title="Mesajı sil (herkesten silinir)"
+                    className="rounded-md border border-cizgi px-1.5 py-0.5 text-[10px] font-medium text-soluk transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-400 active:scale-95"
+                  >
+                    🗑 Sil
+                  </button>
+                </span>
+              )}
+            </div>
             {duzenlenenId === mesaj.id ? (
               <div className="mt-1 flex gap-1.5">
                 <input
