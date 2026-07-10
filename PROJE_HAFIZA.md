@@ -5,7 +5,13 @@
 ## Proje nedir?
 rave.io benzeri, web'de çalışan, ticari olmayan "birlikte izleme" uygulaması. Arkadaş ortamı için: oda kur → kodu paylaş → senkronize YouTube izle + sohbet et. Film siteleri (ör. hdfilmcehennemi) için iframe + "3-2-1 senkron sayacı" yaklaşımı var. Kullanıcı: kaanturan627@gmail.com, Türkçe arayüz istendi.
 
-## Durum (2026-07-11, 19. tur)
+## Durum (2026-07-11, 20. tur)
+- ✅ **20. tur (2026-07-11): 🪟 Yüzen sohbet incelt + Opera GX fallback'i.**
+  - Kullanıcı Opera GX kullanıyor — orada `documentPictureInPicture` YOK. Yeni sıra: önce Document PiP dene (Chrome/Edge; tam ekranın da üstünde), olmuyorsa **`window.open` popup fallback** (`popup=yes,380×120`, ekranın sağ altına yakın; adı `rve-yuzen-sohbet`). Popup tam ekranın altına inebilir ama tıklayınca/görev çubuğundan öne gelir; aynı portal + stil kopyalama kodu iki yolda da ortak. İkisi de açılamazsa (popup engelleyici) bildirim.
+  - Pencere **yalnız yazma satırı** (input + ➤): gelen mesajlar zaten danmaku'yla ekranda aktığı için liste kaldırıldı (kullanıcı isteği); `mesajlar`/`benimAdim` props'ları gitti (mesaj başına yeniden render de bitti). Boyut 380×120.
+  - **Doğrulama:** build temiz; E2E 10/10 — Edge PiP yolu (normal + site tam ekranında gönderim + danmaku) ve Opera simülasyonu (`delete window.documentPictureInPicture` init script'iyle → popup fallback'ten gönderim); 17. tur takımı 18/18 regresyonsuz. Ekran görüntüsü: popup sadece input satırı.
+
+## Önceki durum (2026-07-11, 19. tur)
 - ✅ **19. tur (2026-07-11): 3-2-1/Durdur kaldırıldı + 🪟 düğmesi her zaman görünür.**
   1. **3-2-1 senkron sayacı ve Durdur tamamen kaldırıldı** (kullanıcı: "web'de tam ekranda faydası yok"). Gidenler: `components/GeriSayim.tsx` (silindi), FilmPaneli'ndeki senkron saati + ▶ 3-2-1 + ⏸ Durdur + "🔒 Kontroller sahipte" rozeti (panel artık rozet · adres · eklenti çipi · Sekmede aç), page.tsx'te `hSaat`/`geriSayim*`/`hariciDurdur` state-callback-olayları, `SenkronOlay`'dan `geriSayim`/`hariciDurdur` türleri (eski istemci yollarsa sessizce yok sayılır), globals.css `.rakam`, ana sayfa + /eklenti + Netflix kartı metinleri (artık eklentiye yönlendiriyor). Harici senkron artık yalnız eklentiyle.
   2. **🪟 Yüzen sohbet düğmesi artık HER ZAMAN görünür** — API algılanamayınca gizleniyordu, kullanıcı "ikon gözükmüyor" dedi (muhtemel neden: eski sekme/önbellek ya da desteksiz tarayıcı; ayırt edilemiyordu). Şimdi düğme hep var; desteklemeyen tarayıcıda basınca bildirim: "🪟 Tarayıcın yüzen pencereyi desteklemiyor — güncel masaüstü Chrome/Edge gerekli" (`onDesteksiz={bildirimGoster}`). NOT: bildirim video üstü alanda çıkar; kullanıcı hâlâ görmüyorsa sayfayı yenilesin (eski bundle) ve tarayıcı/sürüm sorulsun.

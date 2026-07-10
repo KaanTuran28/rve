@@ -1091,8 +1091,6 @@ export default function OdaSayfasi() {
             )}
           </button>
           <YuzenSohbet
-            mesajlar={mesajlar}
-            benimAdim={ad}
             susturuldum={susturuldum}
             onGonder={mesajGonder}
             onDesteksiz={bildirimGoster}
