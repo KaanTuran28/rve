@@ -525,6 +525,12 @@ export default function OdaSayfasi() {
     window.postMessage({ __rve: "baglan", kod: odaKodu }, "*");
   }, [odaKodu]);
 
+  // Bağlıyken çipe tekrar basınca eklenti odadan ayrılır
+  const eklentiKapat = useCallback(() => {
+    window.postMessage({ __rve: "kapat" }, "*");
+    setEklenti("var");
+  }, []);
+
   // Presence'ta benden başka kimse yoksa odanın son üyesiyim
   const sonUyeyMiyim = useCallback(() => {
     const kanal = kanalRef.current;
@@ -1136,6 +1142,7 @@ export default function OdaSayfasi() {
               kilitli={kilitli}
               eklenti={eklenti}
               onEklentiBaglan={eklentiyeBaglan}
+              onEklentiKapat={eklentiKapat}
               onGeriSayim={geriSayimBaslat}
               onDurdur={hariciDurdur}
             />

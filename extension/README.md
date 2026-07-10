@@ -24,7 +24,7 @@ sayfadaki oynatıcıyı odanın Supabase kanalına bağlar.
 
 ## Kurulum
 
-**En kolay yol:** `https://rve-ebon.vercel.app/eklenti` — zip'i indir, sayfadaki 3 adımlı
+**En kolay yol:** `https://rve-kappa.vercel.app/eklenti` — zip'i indir, sayfadaki 3 adımlı
 rehberi izle. Sayfa kurulumu **canlı algılar**: eklenti yüklenir yüklenmez kutu yeşile döner
 (sayfayı yenilemek gerekmez; eklenti kurulunca açık sekmelere kendini enjekte eder).
 
@@ -40,7 +40,7 @@ rehberi izle. Sayfa kurulumu **canlı algılar**: eklenti yüklenir yüklenmez k
 > normal arayüzden yükleme etkilenmez.)
 
 ## Kullanım
-1. Rve sitesinde (`rve-ebon.vercel.app`) oda kur, kodu paylaş.
+1. Rve sitesinde (`rve-kappa.vercel.app`) oda kur, kodu paylaş.
 2. Herkes **aynı sitede aynı içeriği** ayrı sekmede açsın (aynı film sayfası / aynı Netflix
    başlığı).
 3. Eklenti simgesi → **oda kodunu** gir → **Bağlan**. Durum "Bağlı: oda XXXX" olur.
