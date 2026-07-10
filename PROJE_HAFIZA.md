@@ -6,7 +6,7 @@
 rave.io benzeri, web'de çalışan, ticari olmayan "birlikte izleme" uygulaması. Arkadaş ortamı için: oda kur → kodu paylaş → senkronize YouTube izle + sohbet et. Film siteleri (ör. hdfilmcehennemi) için iframe + "3-2-1 senkron sayacı" yaklaşımı var. Kullanıcı: kaanturan627@gmail.com, Türkçe arayüz istendi.
 
 ## Durum (2026-07-11, 17. tur)
-- ✅ **17. tur (2026-07-11): sitenin KENDİ tam ekranında kayan mesajlar (YEREL — kullanıcı isteğiyle PUSH EDİLMEDİ, site aktif kullanılıyordu).**
+- ✅ **17. tur (2026-07-11): sitenin KENDİ tam ekranında kayan mesajlar (`584ab2b` pushlandı, canlıda doğrulandı).** NOT: bu commit'in ilk Vercel build'i klonlamadan hemen sonra logsuz "Error" verdi (platform hıçkırığı) — `npx vercel redeploy <deploy-url>` çözdü; alias otomatik güncellendi.
   - **Sorun:** Harici site iframe'inde kullanıcılar sitenin oynatıcısındaki ⛶'e basıyor (bizim ⛶ site sayfasını çerçevesiyle gösteriyor, videoyu değil). O zaman `fullscreenElement` = iframe olur; sahne içindeki baloncuk/kayanlar iframe'in altında kalıp görünmüyordu.
   - **Çözüm — tam ekran türü ayrımı (`tamEkranTuru: null|'sahne'|'yabanci'`):**
     - `sahne` (bizim ⛶): kayanlar + 💬 baloncuğu ESKİSİ gibi sahnenin içinde — tam ekran öğesinin alt ağacında oldukları için tıklanabilir.
