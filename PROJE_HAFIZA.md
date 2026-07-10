@@ -5,7 +5,18 @@
 ## Proje nedir?
 rave.io benzeri, web'de çalışan, ticari olmayan "birlikte izleme" uygulaması. Arkadaş ortamı için: oda kur → kodu paylaş → senkronize YouTube izle + sohbet et. Film siteleri (ör. hdfilmcehennemi) için iframe + "3-2-1 senkron sayacı" yaklaşımı var. Kullanıcı: kaanturan627@gmail.com, Türkçe arayüz istendi.
 
-## Durum (2026-07-10, 16. tur)
+## Durum (2026-07-11, 17. tur)
+- ✅ **17. tur (2026-07-11): sitenin KENDİ tam ekranında kayan mesajlar (YEREL — kullanıcı isteğiyle PUSH EDİLMEDİ, site aktif kullanılıyordu).**
+  - **Sorun:** Harici site iframe'inde kullanıcılar sitenin oynatıcısındaki ⛶'e basıyor (bizim ⛶ site sayfasını çerçevesiyle gösteriyor, videoyu değil). O zaman `fullscreenElement` = iframe olur; sahne içindeki baloncuk/kayanlar iframe'in altında kalıp görünmüyordu.
+  - **Çözüm — tam ekran türü ayrımı (`tamEkranTuru: null|'sahne'|'yabanci'`):**
+    - `sahne` (bizim ⛶): kayanlar + 💬 baloncuğu ESKİSİ gibi sahnenin içinde — tam ekran öğesinin alt ağacında oldukları için tıklanabilir.
+    - `yabanci` (site/YouTube oynatıcısının kendi ⛶'ü): `popover="manual"` kabı (`fsKatmanRef`) `fullscreenchange`'te kapat-aç yapılarak top layer'da tam ekran öğesinin ÜSTÜNE alınır; içinde YALNIZ kayan mesajlar + 6 sn'lik "💬 ... yazmak için Esc" ipucu. Baloncuk yabancıda render edilmez (aşağıdaki tarayıcı sınırı yüzünden tıklanamaz olurdu). Bonus: YouTube'un kendi tam ekranında da artık kayanlar var.
+    - Popover'sız eski tarayıcı: her tam ekranda eski davranış (sahne içi), `popoverVar` mount'ta `"showPopover" in HTMLElement.prototype`.
+  - **⚠️ KRİTİK TARAYICI DERSİ (Chromium/Edge 150, minimal repro ile kanıtlandı):** tam ekran öğesinin üstüne sonradan açılan popover **BOYANIR ama HIT-TEST EDİLMEZ** — `elementFromPoint` ve gerçek tıklamalar (headed dahil) popover'ı yok sayıp tam ekran öğesine gider; `pointer-events:auto` tam-ekran kap da kurtarmıyor. `dialog.showModal()` girdi ALIR ama arka planı inert yapar (film kontrol edilemez). Yani **yabancı tam ekran üstünde tıklanabilir kalıcı katman şu an imkânsız** — o yüzden yabancıda sadece görsel katman var. (İleride istenirse: Document Picture-in-Picture ile ayrı her-zaman-üstte sohbet penceresi, ya da eklenti content.js'in fullscreenElement içine danmaku+input basması.)
+  - **Doğrulama:** build temiz; iki-bağlam E2E 18/18 (sahte cross-origin film sitesi + gerçek Supabase): site-FS'te popover açık + ipucu + baloncuk yok + A'nın mesajı popover'da `.kayan-mesaj` aktı (ekran görüntüsüyle); bizim ⛶'de popover kapalı + baloncuk sahnede tıklandı→kutu→mesaj A'ya + kayan sahnede; iç içe (sahne-FS→site-FS) geçişte katman yabancıya döndü. Başarısız koşulardan kalan birkaç `testA film gecesi` test odası pg_cron'un 24s temizliğine bırakıldı.
+  - **E2E notları:** Playwright `text=Aç` alt dizgi eşleşir — sahnedeki "…aynı anda açılır." metnine tıklar, `button:text-is("Aç")` kullan. Headless'ta Esc tam ekrandan çıkarmayabiliyor → `document.exitFullscreen()`. İki bağlamda broadcast bazen ilk videoya yetişemiyor → B'yi yenileyip DB'den okutan fallback koy.
+
+## Önceki durum (2026-07-10, 16. tur)
 - ✅ **16. tur (2026-07-10): "silindi" izi + taşınabilir baloncuk + Android rehberi.**
   1. **Silinen mesaj izi:** silme artık sert değil — `messages.deleted_at` (migration `rve_mesaj_silindi_isareti`), içerik `"silindi"` ile değiştirilir; yerinde italik "🗑 Bu mesaj silindi" görünür (düğmeler + "(düzenlendi)" gizlenir), yenilemede de kalır. `mesajSil` broadcast payload'ı `{id, deleted_at}`.
   2. **Taşınabilir 💬 baloncuğu:** `components/MesajBaloncugu.tsx` — pointer olaylarıyla sürükleme (8px eşik: altı dokunuş sayılır, kutuyu açar), konum `rve_balon_konum` localStorage'da; kutu açıkken ⠿ kulpundan taşınır. **İki kritik ders:** (a) sürükleme sırasında `fixed inset-0` görünmez KALKAN katmanı şart — pointer capture cross-origin YouTube iframe'ine karşı yetmiyor, imleç iframe'e girince olaylar oraya gidiyor; (b) dokunuşta tarayıcının gecikmeli ürettiği click, aynı noktada yeni açılan kutunun ✕'ine denk gelip kapatıyor (hayalet tıklama) → `pointerdown`'da `preventDefault` + açılıştan sonra 350ms kapat/gönder yok sayılır.
@@ -66,7 +77,7 @@ rave.io benzeri, web'de çalışan, ticari olmayan "birlikte izleme" uygulaması
   - **Mobil/tablet:** header düğmeleri <sm'de simgeye iner (🔓/🎬-💬/⛶, kod rozeti kısalır), 390px ve 820px'te yatay taşma 0 doğrulandı. `Tam ekran` düğmesi `document.fullscreenEnabled` yoksa (iPhone Safari) gizlenir.
   - **Güvenlik:** migration `rve_veri_kisitlari` — messages.content ≤500, nickname ≤40, rooms.name ≤80, code 4-12, video_url ≤2048 + `^https?://` regex, queue ≤50 öğe, playback_time 0-360000 (REST'ten doğrudan kötüye yazmaya karşı). `girdiCozumle` artık null dönebilir: `javascript:`/geçersiz girdiler "⚠️ Geçersiz adres" bildirimiyle reddedilir; YouTube girdisi (çıplak ID dahil) kanonik `https://www.youtube.com/watch?v=ID` olarak yazılır (DB kısıtı gereği!). `HariciIzleyici` http(s) olmayan url'i iframe/link olarak asla render etmez + iframe'e `sandbox` (top-navigation/popup yok — reklamlı film sitelerinin yönlendirmesini de keser). `next.config.mjs`: X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy başlıkları.
   - **Doğrulama:** build temiz; cila E2E 13 kontrol (başlıklar, yazıyor, 4 toast, javascript: reddi, kanonik URL DB'de, 600 karakter mesaj 23514 ile red, kötü video_url reddi, mobil+tablet taşma 0 + ekran görüntüleri) + 11 adımlık 9. tur regresyonu GEÇTİ.
-  - Sesli sohbet bilinçli ertelendi (LiveKit ücretsiz katman notu: 5.000 katılımcı-dk/ay, tercih edilirse yarım günlük iş).
+  - Sesli sohbet bilinçli ertelendi; sonradan (2026-07-10) kullanıcı fikri tamamen iptal etti — bkz. "Bilinen sınırlar" bölümündeki not.
 
 ## Önceki durum (2026-07-05, 3. tur)
 - ✅ **Supabase kuruldu (MCP ile).** Proje ref: `jjdgfhqsbsfygyfopfxd`, URL: `https://jjdgfhqsbsfygyfopfxd.supabase.co`. `schema.sql` `rve_initial_schema` migration'ı olarak uygulandı (rooms + messages + RLS politikaları). `.env.local` dolduruldu (NEXT_PUBLIC_SUPABASE_URL + klasik anon JWT). DB yazma/okuma + FK cascade + ana sayfa render'ı doğrulandı (test odası oluşturulup silindi). Güvenlik advisor'ı sadece beklenen "RLS always true" uyarılarını veriyor (auth'suz arkadaş uygulaması için bilinçli).
@@ -111,7 +122,8 @@ supabase/schema.sql     tablolar + RLS politikaları
 - Kilit sadece istemci tarafında uygulanır (RLS herkese açık); kötü niyetli biri DB'ye doğrudan yazabilir — arkadaş uygulaması için kabul edildi.
 - Kuyruk otomatik geçişi yalnızca YouTube modunda (YT ENDED olayı); harici modda video bitişini bilemeyiz.
 - Aktif izlenen ama 24 saattir hiç oynat/duraklat yapılmayan oda cron'a takılabilir (çok uzak ihtimal; updated_at her kontrolde tazelenir).
-- Olası eklemeler: sesli sohbet (LiveKit ücretsiz katman), eklenti izinlerini belirli sitelere daraltma + mağaza paketi, "herkesi senkronla" düğmesi.
+- Olası eklemeler: eklenti izinlerini belirli sitelere daraltma + mağaza paketi, "herkesi senkronla" düğmesi.
+- **Sesli sohbet YAPILMAYACAK** — kullanıcı 2026-07-10'da fikri tamamen iptal etti (hiç kodlanmamıştı; önerme, plana ekleme).
 
 ## Komutlar
 ```bash

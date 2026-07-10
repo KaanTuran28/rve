@@ -62,9 +62,20 @@ export default function OdaSayfasi() {
   const [yazanlar, setYazanlar] = useState<string[]>([]);
   // iPhone Safari element tam ekranı desteklemez; düğme gizlenir
   const [tamEkranVar, setTamEkranVar] = useState(true);
-  // Sahne şu anda tam ekranda mı — gelen mesajlar video üstünde kayar,
-  // 💬 baloncuğu görünür (MesajBaloncugu; tam ekrandan çıkınca unmount olur)
-  const [tamEkranda, setTamEkranda] = useState(false);
+  // Tam ekran türü — "sahne": bizim ⛶ (kayanlar + baloncuk sahnenin içinde,
+  // tam ekran öğesinin alt ağacında oldukları için tıklanabilir); "yabanci":
+  // harici sitenin/YouTube'un OYNATICISININ kendi tam ekranı (fullscreenElement
+  // = iframe; kayanlar popover'la üstüne çizilir ama Chromium top-layer
+  // popover'a boyamayı verip HIT-TEST'i vermiyor → tıklanabilir baloncuk
+  // gösterilemez, sadece görsel katman olur)
+  const [tamEkranTuru, setTamEkranTuru] = useState<null | "sahne" | "yabanci">(
+    null
+  );
+  const tamEkranda = tamEkranTuru !== null;
+  // Yabancı tam ekranın başında kısa "nasıl yazarım" ipucu
+  const [fsIpucu, setFsIpucu] = useState(false);
+  // Popover API var mı (mount'ta set: hydration uyumu)
+  const [popoverVar, setPopoverVar] = useState(false);
   // Tam ekranda video üstünde kayan mesajlar (danmaku)
   const [kayanlar, setKayanlar] = useState<
     { id: string; ad: string; metin: string; serit: number }[]
@@ -130,11 +141,46 @@ export default function OdaSayfasi() {
     setSahipAnahtari(sahipAnahtariOku(odaKodu));
     const belge = document as Document & { webkitFullscreenEnabled?: boolean };
     setTamEkranVar(!!(document.fullscreenEnabled || belge.webkitFullscreenEnabled));
+    setPopoverVar("showPopover" in HTMLElement.prototype);
   }, [odaKodu]);
 
-  // Tam ekran durumunu izle (Esc ile de çıkılabildiği için olaydan dinlenir)
+  const sahneRef = useRef<HTMLDivElement>(null);
+  // Yabancı tam ekran katmanının popover kabı (yalnız popoverVar iken render edilir)
+  const fsKatmanRef = useRef<HTMLDivElement>(null);
+  const fsIpucuZamanRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Tam ekran durumunu izle (Esc ile de çıkılabildiği için olaydan dinlenir).
+  // Harici sitenin/YouTube'un oynatıcısı iframe içinden tam ekran istediğinde
+  // de burası tetiklenir (fullscreenElement = iframe) — "yabanci" sayılır.
   useEffect(() => {
-    const degisti = () => setTamEkranda(!!document.fullscreenElement);
+    const degisti = () => {
+      const fs = document.fullscreenElement;
+      const tur = fs ? (fs === sahneRef.current ? "sahne" : "yabanci") : null;
+      setTamEkranTuru(tur);
+      // Top layer'da sıralama ekleme anına göre: popover'ı tam ekran
+      // öğesinden SONRA (yeniden) aç ki kayan mesajlar onun üstünde çizilsin.
+      const katman = fsKatmanRef.current;
+      if (katman) {
+        try {
+          katman.hidePopover();
+        } catch {
+          /* zaten kapalıysa hidePopover fırlatır — önemsiz */
+        }
+        if (tur === "yabanci") {
+          try {
+            katman.showPopover();
+          } catch {
+            /* açılamazsa kayanlar iframe'in altında kalır (eski davranış) */
+          }
+        }
+      }
+      // İpucu: yabancı tam ekranın ilk saniyelerinde nasıl yazılacağını söyle
+      if (fsIpucuZamanRef.current) clearTimeout(fsIpucuZamanRef.current);
+      setFsIpucu(tur === "yabanci");
+      if (tur === "yabanci") {
+        fsIpucuZamanRef.current = setTimeout(() => setFsIpucu(false), 6000);
+      }
+    };
     document.addEventListener("fullscreenchange", degisti);
     return () => document.removeEventListener("fullscreenchange", degisti);
   }, []);
@@ -957,8 +1003,6 @@ export default function OdaSayfasi() {
     await durumTazele();
   }
 
-  const sahneRef = useRef<HTMLDivElement>(null);
-
   function tamEkran() {
     const alan = sahneRef.current;
     if (!alan) return;
@@ -1055,6 +1099,29 @@ export default function OdaSayfasi() {
   const ytId = oda?.video_url ? youtubeIdAyikla(oda.video_url) : null;
   const youtubeModu = oda?.video_type === "youtube" && ytId;
   const kuyruk = oda?.queue ?? [];
+
+  // Tam ekranda video üstünde kayan mesajlar (danmaku) — iki yerde kullanılır:
+  // sahne tam ekranında sahnenin içinde, yabancı (site oynatıcısının kendi)
+  // tam ekranında popover katmanında.
+  const kayanlarKatmani = kayanlar.map((k) => (
+    <div
+      key={k.id}
+      className="kayan-mesaj z-20 rounded-full bg-perde/70 px-3.5 py-1.5 text-sm text-isik shadow-lg backdrop-blur-sm"
+      style={{ top: `${7 + k.serit * 9}%` }}
+    >
+      <span className="font-semibold text-amber">{k.ad}</span>
+      <span className="ml-2">{k.metin}</span>
+    </div>
+  ));
+  // Sahne (bizim ⛶) tam ekranı: baloncuk tıklanabilir — tam ekran öğesinin
+  // alt ağacında. Popover'sız eski tarayıcıda her tam ekranda burada kalır.
+  const sahneIciKatman = (tamEkranTuru === "sahne" ||
+    (!popoverVar && tamEkranda)) && (
+    <>
+      {kayanlarKatmani}
+      <MesajBaloncugu susturuldum={susturuldum} onGonder={mesajGonder} />
+    </>
+  );
 
   return (
     <div className="flex h-dvh flex-col">
@@ -1199,21 +1266,27 @@ export default function OdaSayfasi() {
                 {bildirim}
               </div>
             )}
-            {tamEkranda &&
-              kayanlar.map((k) => (
-                <div
-                  key={k.id}
-                  className="kayan-mesaj z-20 rounded-full bg-perde/70 px-3.5 py-1.5 text-sm text-isik shadow-lg backdrop-blur-sm"
-                  style={{ top: `${7 + k.serit * 9}%` }}
-                >
-                  <span className="font-semibold text-amber">{k.ad}</span>
-                  <span className="ml-2">{k.metin}</span>
-                </div>
-              ))}
-            {tamEkranda && (
-              <MesajBaloncugu susturuldum={susturuldum} onGonder={mesajGonder} />
-            )}
+            {sahneIciKatman}
           </div>
+          {popoverVar && (
+            /* Yabancı tam ekran (site/YouTube oynatıcısının kendi ⛶'ü):
+               popover top layer'da tam ekran iframe'in ÜSTÜNE boyanır —
+               ama Chromium hit-test'i tam ekran öğesine verdiği için burada
+               yalnız görsel şeyler (kayan mesajlar + ipucu) yaşar. */
+            <div
+              ref={fsKatmanRef}
+              popover="manual"
+              className="pointer-events-none fixed inset-0 m-0 h-full w-full overflow-hidden border-0 bg-transparent p-0"
+            >
+              {tamEkranTuru === "yabanci" && kayanlarKatmani}
+              {tamEkranTuru === "yabanci" && fsIpucu && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-perde/80 px-4 py-2 text-sm text-isik shadow-lg backdrop-blur-sm">
+                  💬 Sohbet mesajları burada akar — yazmak için{" "}
+                  <b className="text-amber">Esc</b>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2 border-t border-cizgi bg-koltuk p-3">
             <input

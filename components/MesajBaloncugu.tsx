@@ -129,7 +129,9 @@ export default function MesajBaloncugu({ susturuldum, onGonder }: Props) {
   return (
     <div
       ref={kapRef}
-      className={`absolute z-30 ${konum ? "" : "bottom-16 right-3"}`}
+      // pointer-events-auto: popover kabı (tam ekran katmanı) olayları
+      // geçirmez; baloncuk kendi olaylarını burada geri açar
+      className={`pointer-events-auto absolute z-30 ${konum ? "" : "bottom-16 right-3"}`}
       style={konum ? { left: konum.x, top: konum.y } : undefined}
     >
       {surukluyor && (
