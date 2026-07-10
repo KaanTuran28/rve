@@ -16,6 +16,7 @@ import {
   videoBasligi,
 } from "@/lib/supabase";
 import type {
+  EklentiDurumu,
   KuyrukOgesi,
   Mesaj,
   Oda,
@@ -25,7 +26,8 @@ import type {
 } from "@/lib/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import YouTubeOynatici from "@/components/YouTubeOynatici";
-import HariciIzleyici, { type EklentiDurumu } from "@/components/HariciIzleyici";
+import HariciIzleyici from "@/components/HariciIzleyici";
+import FilmPaneli from "@/components/FilmPaneli";
 import Sohbet from "@/components/Sohbet";
 import Katilimcilar from "@/components/Katilimcilar";
 import GeriSayim from "@/components/GeriSayim";
@@ -48,6 +50,8 @@ export default function OdaSayfasi() {
     null
   );
   const [sinemaModu, setSinemaModu] = useState(false);
+  // Sinema modunda (sohbet gizliyken) gelen mesaj sayısı — düğmede rozet
+  const [okunmamis, setOkunmamis] = useState(0);
   const [videoGirdi, setVideoGirdi] = useState("");
   const [kopyalandi, setKopyalandi] = useState(false);
   const [gecikmeUyarisi, setGecikmeUyarisi] = useState(false);
@@ -57,6 +61,12 @@ export default function OdaSayfasi() {
   const [yazanlar, setYazanlar] = useState<string[]>([]);
   // iPhone Safari element tam ekranı desteklemez; düğme gizlenir
   const [tamEkranVar, setTamEkranVar] = useState(true);
+  // Sahne şu anda tam ekranda mı — gelen mesajlar video üstünde kayar
+  const [tamEkranda, setTamEkranda] = useState(false);
+  // Tam ekranda video üstünde kayan mesajlar (danmaku)
+  const [kayanlar, setKayanlar] = useState<
+    { id: string; ad: string; metin: string; serit: number }[]
+  >([]);
   // Tarayıcı eklentisi bu sekmede var mı / odaya bağlı mı
   const [eklenti, setEklenti] = useState<EklentiDurumu>("yok");
   // Kanal koptuğunda artırılır; kanal efekti yeniden kurulur
@@ -79,6 +89,8 @@ export default function OdaSayfasi() {
   const sahibim = !!(oda?.owner_token && sahipAnahtari === oda.owner_token);
   // Kilit BENİ kısıtlıyor mu (sahip her zaman serbest)
   const kilitli = !!oda?.locked && !sahibim;
+  // Oda sahibi beni susturdu mu (sohbete yazamam)
+  const susturuldum = !sahibim && !!ad && (oda?.muted ?? []).includes(ad);
 
   const kanalRef = useRef<RealtimeChannel | null>(null);
   const hSaatRef = useRef(hSaat);
@@ -89,9 +101,20 @@ export default function OdaSayfasi() {
   kilitliRef.current = kilitli;
   const eklentiRef = useRef(eklenti);
   eklentiRef.current = eklenti;
+  const sinemaModuRef = useRef(sinemaModu);
+  sinemaModuRef.current = sinemaModu;
+  const tamEkrandaRef = useRef(tamEkranda);
+  tamEkrandaRef.current = tamEkranda;
+  const susturuldumRef = useRef(susturuldum);
+  susturuldumRef.current = susturuldum;
+  const kayanSiraRef = useRef(0);
   const oynaticiRef = useRef<OynaticiKontrol | null>(null);
   const odaIdRef = useRef<string | null>(null);
   const baslangicSaniyeRef = useRef(0);
+  // baslangicSaniye'nin hesaplandığı an + "oda o an oynuyordu" bayrağı
+  // (geç katılan için sessiz otomatik başlatma)
+  const baslangicTsRef = useRef(0);
+  const otomatikBaslatRef = useRef(false);
   const baglantiZamaniRef = useRef(0);
   const adRef = useRef(ad);
   adRef.current = ad;
@@ -106,6 +129,27 @@ export default function OdaSayfasi() {
     const belge = document as Document & { webkitFullscreenEnabled?: boolean };
     setTamEkranVar(!!(document.fullscreenEnabled || belge.webkitFullscreenEnabled));
   }, [odaKodu]);
+
+  // Tam ekran durumunu izle (Esc ile de çıkılabildiği için olaydan dinlenir)
+  useEffect(() => {
+    const degisti = () => setTamEkranda(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", degisti);
+    return () => document.removeEventListener("fullscreenchange", degisti);
+  }, []);
+
+  // Tam ekrandayken mesajı video üstünde kayan şerit olarak göster
+  const kayanEkle = useCallback((mesajAd: string, metin: string) => {
+    if (!tamEkrandaRef.current) return;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const serit = kayanSiraRef.current++ % 5;
+    const kisa = metin.length > 90 ? `${metin.slice(0, 90)}…` : metin;
+    setKayanlar((k) => [...k.slice(-14), { id, ad: mesajAd, metin: kisa, serit }]);
+    // Animasyon 9 sn; payı olsun diye 10 sn sonra listeden düş
+    setTimeout(
+      () => setKayanlar((k) => k.filter((x) => x.id !== id)),
+      10000
+    );
+  }, []);
 
   // Video üstünde 2.6 sn görünen bildirim
   const bildirimGoster = useCallback((metin: string) => {
@@ -176,6 +220,8 @@ export default function OdaSayfasi() {
         konum += (Date.now() - Date.parse(odaVerisi.updated_at)) / 1000;
       }
       baslangicSaniyeRef.current = Math.max(0, konum);
+      baslangicTsRef.current = Date.now();
+      otomatikBaslatRef.current = odaVerisi.is_playing;
       odaIdRef.current = odaVerisi.id;
       // Harici içerik için ortak saati oda kaydından türet (geç gelen senkron kalır)
       if (odaVerisi.video_type === "external") {
@@ -237,6 +283,7 @@ export default function OdaSayfasi() {
             : "🎬 Sıradaki videoya geçildi"
         );
         baslangicSaniyeRef.current = 0;
+        otomatikBaslatRef.current = false;
         setHSaat({ oynuyor: false, taban: 0, ts: 0 });
         setOda((onceki) =>
           onceki
@@ -273,6 +320,18 @@ export default function OdaSayfasi() {
             ? "Oda sahibi kontrolleri kilitledi 🔒"
             : "Oda sahibi kilidi açtı 🔓"
         );
+      } else if (olay.tur === "sustur") {
+        const onceki = odaRef.current?.muted ?? [];
+        setOda((o) => (o ? { ...o, muted: olay.adlar } : o));
+        for (const a of olay.adlar.filter((a) => !onceki.includes(a))) {
+          sistemMesaji(`${a} oda sahibi tarafından susturuldu 🔇`);
+          if (a === adRef.current) bildirimGoster("🔇 Oda sahibi seni susturdu");
+        }
+        for (const a of onceki.filter((a) => !olay.adlar.includes(a))) {
+          sistemMesaji(`${a} yeniden konuşabilir 🔊`);
+          if (a === adRef.current)
+            bildirimGoster("🔊 Susturman kaldırıldı");
+        }
       }
     },
     [sistemMesaji, bildirimGoster]
@@ -307,6 +366,7 @@ export default function OdaSayfasi() {
       });
     } else if (guncel.video_url !== oncekiUrl) {
       baslangicSaniyeRef.current = 0;
+      otomatikBaslatRef.current = false;
     } else if (guncel.video_url) {
       let konum = guncel.playback_time;
       if (guncel.is_playing) {
@@ -339,9 +399,28 @@ export default function OdaSayfasi() {
       .on("broadcast", { event: "senkron" }, ({ payload }) =>
         olayIsle(payload as SenkronOlay)
       )
-      .on("broadcast", { event: "mesaj" }, ({ payload }) =>
-        setMesajlar((m) => [...m, payload as Mesaj])
-      )
+      .on("broadcast", { event: "mesaj" }, ({ payload }) => {
+        const gelen = payload as Mesaj;
+        setMesajlar((m) => [...m, gelen]);
+        // Sohbet gizliyken gelenler rozete sayılır
+        if (sinemaModuRef.current) setOkunmamis((n) => n + 1);
+        // Tam ekrandaysa video üstünde kayarak geçer
+        kayanEkle(gelen.nickname, gelen.content);
+      })
+      .on("broadcast", { event: "mesajSil" }, ({ payload }) => {
+        const { id } = payload as { id: string };
+        setMesajlar((m) => m.filter((x) => x.id !== id));
+      })
+      .on("broadcast", { event: "mesajDuzenle" }, ({ payload }) => {
+        const yeni = payload as Pick<Mesaj, "id" | "content" | "edited_at">;
+        setMesajlar((m) =>
+          m.map((x) =>
+            x.id === yeni.id
+              ? { ...x, content: yeni.content, edited_at: yeni.edited_at }
+              : x
+          )
+        );
+      })
       .on("broadcast", { event: "yaziyor" }, ({ payload }) => {
         const yazan = (payload as { ad?: string })?.ad;
         if (yazan && yazan !== adRef.current) yazanEkle(yazan);
@@ -391,6 +470,7 @@ export default function OdaSayfasi() {
     olayIsle,
     sistemMesaji,
     yazanEkle,
+    kayanEkle,
     baglantiSurumu,
     durumTazele,
   ]);
@@ -491,13 +571,21 @@ export default function OdaSayfasi() {
     return () => window.removeEventListener("pagehide", temizle);
   }, [sonUyeyMiyim]);
 
+  // Kilitliyken oynat/duraklat denemesi: oynatıcı kendini geri aldı, haber ver
+  const kilitliDeneme = useCallback(() => {
+    bildirimGoster("🔒 Kontroller oda sahibinde");
+  }, [bildirimGoster]);
+
   // Oynatıcıdan gelen yerel olayları yayınla + kalıcı duruma yaz
   const yerelOlay = useCallback((olay: SenkronOlay) => {
-    // Oda kilitli ve sahip değilsem oynat/duraklat odaya yayılmaz (yerelde kalır)
+    // Oda kilitliyken sahip olmayan kimse oynatamaz/durduramaz — kendi
+    // ekranında bile. Deneme yayılmaz; oynatıcı DB'deki oda durumuna döndürülür.
     if (
       kilitliRef.current &&
       (olay.tur === "oynat" || olay.tur === "duraklat")
     ) {
+      bildirimGoster("🔒 Kontroller oda sahibinde");
+      durumTazele();
       return;
     }
     // Karşı tarafta "kim yaptı" bildirimi çıksın diye ad iliştirilir
@@ -525,7 +613,7 @@ export default function OdaSayfasi() {
         .eq("id", odaIdRef.current)
         .then(() => {});
     }
-  }, []);
+  }, [bildirimGoster, durumTazele]);
 
   // Girdiyi güvenli bir URL'ye çözer; http(s) dışı her şeyde null (javascript: vb.)
   function girdiCozumle(girdi: string): {
@@ -563,6 +651,7 @@ export default function OdaSayfasi() {
     const mevcut = odaRef.current;
     if (!mevcut || !supabase) return;
     baslangicSaniyeRef.current = 0;
+    otomatikBaslatRef.current = false;
     setHSaat({ oynuyor: false, taban: 0, ts: 0 });
     setOda({
       ...mevcut,
@@ -694,6 +783,7 @@ export default function OdaSayfasi() {
       .select();
     if (!data || data.length === 0) return; // başka bir katılımcı geçti
     baslangicSaniyeRef.current = 0;
+    otomatikBaslatRef.current = false;
     setHSaat({ oynuyor: false, taban: 0, ts: 0 });
     setOda(data[0] as Oda);
     bildirimGoster("🎬 Sıradaki videoya geçildi");
@@ -724,7 +814,7 @@ export default function OdaSayfasi() {
   }
 
   async function mesajGonder(metin: string) {
-    if (!oda || !supabase) return;
+    if (!oda || !supabase || susturuldumRef.current) return;
     const { data } = await supabase
       .from("messages")
       .insert({ room_id: oda.id, nickname: ad, content: metin })
@@ -733,6 +823,60 @@ export default function OdaSayfasi() {
     if (!data) return;
     setMesajlar((m) => [...m, data as Mesaj]);
     kanalRef.current?.send({ type: "broadcast", event: "mesaj", payload: data });
+    kayanEkle(ad, metin);
+  }
+
+  // Kendi mesajını sil: DB'den kaldır + herkese duyur
+  async function mesajSil(id: string) {
+    if (!supabase) return;
+    setMesajlar((m) => m.filter((x) => x.id !== id));
+    kanalRef.current?.send({
+      type: "broadcast",
+      event: "mesajSil",
+      payload: { id },
+    });
+    await supabase.from("messages").delete().eq("id", id);
+  }
+
+  // Kendi mesajını düzenle: içerik + düzenlendi damgası
+  async function mesajDuzenle(id: string, metin: string) {
+    if (!supabase) return;
+    const edited_at = new Date().toISOString();
+    setMesajlar((m) =>
+      m.map((x) => (x.id === id ? { ...x, content: metin, edited_at } : x))
+    );
+    kanalRef.current?.send({
+      type: "broadcast",
+      event: "mesajDuzenle",
+      payload: { id, content: metin, edited_at },
+    });
+    await supabase
+      .from("messages")
+      .update({ content: metin, edited_at })
+      .eq("id", id);
+  }
+
+  // Oda sahibi: kişiyi sustur / susturmayı kaldır (takma ada göre)
+  async function susturDegistir(hedefAd: string) {
+    const mevcut = odaRef.current;
+    if (!mevcut || !supabase || !sahibim) return;
+    const liste = mevcut.muted ?? [];
+    const susturuluyor = !liste.includes(hedefAd);
+    const yeni = susturuluyor
+      ? [...liste, hedefAd]
+      : liste.filter((a) => a !== hedefAd);
+    setOda({ ...mevcut, muted: yeni });
+    sistemMesaji(
+      susturuluyor
+        ? `${hedefAd} oda sahibi tarafından susturuldu 🔇`
+        : `${hedefAd} yeniden konuşabilir 🔊`
+    );
+    kanalRef.current?.send({
+      type: "broadcast",
+      event: "senkron",
+      payload: { tur: "sustur", adlar: yeni },
+    });
+    await supabase.from("rooms").update({ muted: yeni }).eq("id", mevcut.id);
   }
 
   const geriSayimBaslat = useCallback(() => {
@@ -943,14 +1087,22 @@ export default function OdaSayfasi() {
             {kopyalandi ? "✓" : odaKodu}
           </button>
           <button
-            onClick={() => setSinemaModu((s) => !s)}
-            className="rounded-lg border border-cizgi px-2 py-1.5 text-xs text-isik transition hover:border-amber/60 sm:px-3"
+            onClick={() => {
+              setSinemaModu((s) => !s);
+              setOkunmamis(0);
+            }}
+            className="relative rounded-lg border border-cizgi px-2 py-1.5 text-xs text-isik transition hover:border-amber/60 sm:px-3"
             title={sinemaModu ? "Sohbeti göster" : "Sinema modu: sohbeti gizle"}
           >
             <span className="sm:hidden">{sinemaModu ? "💬" : "🎬"}</span>
             <span className="hidden sm:inline">
               {sinemaModu ? "Sohbeti göster" : "Sinema modu"}
             </span>
+            {sinemaModu && okunmamis > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber px-1 text-[10px] font-bold leading-none text-perde">
+                {okunmamis > 9 ? "9+" : okunmamis}
+              </span>
+            )}
           </button>
           {tamEkranVar && (
             <button
@@ -973,6 +1125,21 @@ export default function OdaSayfasi() {
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {oda?.video_url && (
+            <FilmPaneli
+              url={oda.video_url}
+              videoTipi={oda.video_type}
+              servis={yayinServisi(oda.video_url)}
+              oynuyor={hSaat.oynuyor}
+              taban={hSaat.taban}
+              ts={hSaat.ts}
+              kilitli={kilitli}
+              eklenti={eklenti}
+              onEklentiBaglan={eklentiyeBaglan}
+              onGeriSayim={geriSayimBaslat}
+              onDurdur={hariciDurdur}
+            />
+          )}
           <div ref={sahneRef} className="relative min-h-0 flex-1 bg-black">
             {oda?.video_url ? (
               youtubeModu ? (
@@ -980,21 +1147,17 @@ export default function OdaSayfasi() {
                   ref={oynaticiRef}
                   videoId={ytId!}
                   baslangicSaniye={baslangicSaniyeRef.current}
+                  baslangicTs={baslangicTsRef.current}
+                  otomatikBaslat={otomatikBaslatRef.current}
+                  kilitli={kilitli}
                   onYerelOlay={yerelOlay}
+                  onKilitliDeneme={kilitliDeneme}
                   onBitti={videoBitti}
                 />
               ) : (
                 <HariciIzleyici
                   url={oda.video_url}
                   servis={yayinServisi(oda.video_url)}
-                  oynuyor={hSaat.oynuyor}
-                  taban={hSaat.taban}
-                  ts={hSaat.ts}
-                  kilitli={kilitli}
-                  eklenti={eklenti}
-                  onEklentiBaglan={eklentiyeBaglan}
-                  onGeriSayim={geriSayimBaslat}
-                  onDurdur={hariciDurdur}
                 />
               )
             ) : (
@@ -1017,6 +1180,17 @@ export default function OdaSayfasi() {
                 {bildirim}
               </div>
             )}
+            {tamEkranda &&
+              kayanlar.map((k) => (
+                <div
+                  key={k.id}
+                  className="kayan-mesaj z-20 rounded-full bg-perde/70 px-3.5 py-1.5 text-sm text-isik shadow-lg backdrop-blur-sm"
+                  style={{ top: `${7 + k.serit * 9}%` }}
+                >
+                  <span className="font-semibold text-amber">{k.ad}</span>
+                  <span className="ml-2">{k.metin}</span>
+                </div>
+              ))}
           </div>
 
           <div className="flex gap-2 border-t border-cizgi bg-koltuk p-3">
@@ -1098,13 +1272,22 @@ export default function OdaSayfasi() {
 
         {!sinemaModu && (
           <aside className="flex h-64 w-full flex-col border-t border-cizgi bg-koltuk md:h-auto md:w-80 md:border-l md:border-t-0">
-            <Katilimcilar kimlikler={katilimcilar} benimKimlik={kimlik} />
+            <Katilimcilar
+              kimlikler={katilimcilar}
+              benimKimlik={kimlik}
+              sahibim={sahibim}
+              susturulanlar={oda?.muted ?? []}
+              onSustur={susturDegistir}
+            />
             <Sohbet
               mesajlar={mesajlar}
               benimAdim={ad}
               yazanlar={yazanlar}
+              susturuldum={susturuldum}
               onYaziyor={yaziyorBildir}
               onGonder={mesajGonder}
+              onSil={mesajSil}
+              onDuzenle={mesajDuzenle}
             />
           </aside>
         )}
