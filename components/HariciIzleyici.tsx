@@ -8,7 +8,7 @@ interface Props {
   servis: string | null;
 }
 
-/** Harici içerik sahnesi. Üstteki kontroller (saat, 3-2-1, eklenti)
+/** Harici içerik sahnesi. Üstteki kontroller (eklenti çipi, sekmede aç)
  *  tüm modlarda ortak olan FilmPaneli'nde. */
 function HariciIzleyici({ url, servis }: Props) {
   // DB'ye doğrudan yazılmış olabilecek javascript:/data: gibi adresleri asla
@@ -22,8 +22,9 @@ function HariciIzleyici({ url, servis }: Props) {
         <span className="text-3xl">🍿</span>
         <p className="max-w-xs text-sm text-soluk">
           <b className="text-isik">{servis}</b> gömülemez — herkes{" "}
-          <b className="text-isik">“Sekmede aç”</b> ile kendi hesabında açsın,
-          üstteki <b className="text-isik">▶ 3-2-1</b> ile birlikte başlayın.
+          <b className="text-isik">“Sekmede aç”</b> ile kendi hesabında açsın;
+          otomatik senkron için üstteki{" "}
+          <b className="text-isik">🧩 eklenti çipini</b> kullanın.
         </p>
       </div>
     );

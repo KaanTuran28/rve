@@ -9,6 +9,8 @@ interface Props {
   benimAdim: string;
   susturuldum: boolean;
   onGonder: (metin: string) => void;
+  /** Tarayıcı Document PiP desteklemiyorsa gösterilecek bildirim. */
+  onDesteksiz: (mesaj: string) => void;
 }
 
 interface DocumentPictureInPicture {
@@ -36,15 +38,11 @@ export default function YuzenSohbet({
   benimAdim,
   susturuldum,
   onGonder,
+  onDesteksiz,
 }: Props) {
-  const [destek, setDestek] = useState(false);
   const [pencere, setPencere] = useState<Window | null>(null);
   const [metin, setMetin] = useState("");
   const listeRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setDestek(!!dpipAl());
-  }, []);
 
   // Oda sayfasından çıkarken pencereyi de kapat
   useEffect(() => {
@@ -70,7 +68,12 @@ export default function YuzenSohbet({
       return;
     }
     const dpip = dpipAl();
-    if (!dpip) return;
+    if (!dpip) {
+      onDesteksiz(
+        "🪟 Tarayıcın yüzen pencereyi desteklemiyor — güncel masaüstü Chrome/Edge gerekli"
+      );
+      return;
+    }
     try {
       const win = await dpip.requestWindow({ width: 340, height: 330 });
       // Ana sayfanın stillerini (Tailwind dahil) mini pencereye kopyala
@@ -107,23 +110,21 @@ export default function YuzenSohbet({
 
   return (
     <>
-      {destek && (
-        <button
-          onClick={acKapat}
-          className={`rounded-lg border px-2 py-1.5 text-xs transition sm:px-3 ${
-            pencere
-              ? "border-amber/60 text-amber"
-              : "border-cizgi text-isik hover:border-amber/60"
-          }`}
-          title={
-            pencere
-              ? "Yüzen sohbet penceresini kapat"
-              : "Hep üstte mini sohbet penceresi aç — sitenin kendi tam ekranında bile üstte kalır"
-          }
-        >
-          🪟<span className="hidden sm:inline"> Yüzen sohbet</span>
-        </button>
-      )}
+      <button
+        onClick={acKapat}
+        className={`rounded-lg border px-2 py-1.5 text-xs transition sm:px-3 ${
+          pencere
+            ? "border-amber/60 text-amber"
+            : "border-cizgi text-isik hover:border-amber/60"
+        }`}
+        title={
+          pencere
+            ? "Yüzen sohbet penceresini kapat"
+            : "Hep üstte mini sohbet penceresi aç — sitenin kendi tam ekranında bile üstte kalır"
+        }
+      >
+        🪟<span className="hidden sm:inline"> Yüzen sohbet</span>
+      </button>
       {pencere &&
         createPortal(
           <div className="flex h-dvh flex-col bg-perde font-sans text-isik">

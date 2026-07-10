@@ -149,9 +149,8 @@ export default function AnaSayfa() {
       </div>
 
       <p className="mt-8 max-w-md text-center text-xs leading-relaxed text-soluk">
-        YouTube videoları otomatik senkronize oynar; film siteleri için oda içi
-        “3-2-1 senkron” sayacı vardır. Arkadaş ortamı içindir, hesap gerekmez.
-        Netflix ve benzeri sitelerde tam otomatik senkron için{" "}
+        YouTube videoları otomatik senkronize oynar. Arkadaş ortamı içindir,
+        hesap gerekmez. Netflix ve film sitelerinde otomatik senkron için{" "}
         <a
           href="/eklenti"
           className="font-semibold text-amber underline-offset-2 hover:underline"

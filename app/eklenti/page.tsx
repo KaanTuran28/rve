@@ -250,7 +250,7 @@ export default function EklentiSayfasi() {
           <p className="mt-2 text-xs leading-relaxed text-soluk">
             <b className="text-isik">iPhone/iPad:</b> Safari yalnızca App
             Store'dan imzalı eklentilere izin verdiği için kurulum mümkün değil
-            — ama YouTube senkronu ve ▶ 3-2-1 sayacı eklentisiz de çalışır.
+            — ama YouTube senkronu ve sohbet eklentisiz de çalışır.
           </p>
         </div>
 

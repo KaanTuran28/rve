@@ -49,8 +49,6 @@ export type SenkronOlay =
   | { tur: "oynat"; saniye: number; kim?: string }
   | { tur: "duraklat"; saniye: number; kim?: string }
   | { tur: "video"; url: string; videoTipi: VideoTipi; kim?: string }
-  | { tur: "geriSayim"; baslatan: string }
-  | { tur: "hariciDurdur"; saniye: number; kim?: string }
   | { tur: "kuyruk"; kuyruk: KuyrukOgesi[]; kim?: string }
   | { tur: "kilit"; kilitli: boolean }
   | { tur: "sustur"; adlar: string[] };
