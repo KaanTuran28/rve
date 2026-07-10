@@ -144,6 +144,7 @@ export default function MesajBaloncugu({ susturuldum, onGonder }: Props) {
         <div className="flex w-80 max-w-[calc(100vw-2rem)] items-center gap-1.5 rounded-full bg-koltuk/95 p-1.5 shadow-xl backdrop-blur-sm">
           <span
             onPointerDown={(e) => surukleBasla(e, false)}
+            onPointerMove={surukleDevam}
             onPointerUp={() => surukleBitir()}
             onPointerCancel={() => surukleBitir(true)}
             title="Taşımak için sürükle"
@@ -183,6 +184,7 @@ export default function MesajBaloncugu({ susturuldum, onGonder }: Props) {
       ) : (
         <button
           onPointerDown={(e) => surukleBasla(e, true)}
+          onPointerMove={surukleDevam}
           onPointerUp={() => surukleBitir()}
           onPointerCancel={() => surukleBitir(true)}
           title="Mesaj yaz (basılı tutup sürükleyerek taşı)"
