@@ -100,12 +100,14 @@ export default function Sohbet({
               <span className="shrink-0 text-[10px] text-soluk">
                 {saat(mesaj.created_at)}
               </span>
-              {mesaj.edited_at && (
+              {mesaj.edited_at && !mesaj.deleted_at && (
                 <span className="shrink-0 text-[10px] italic text-soluk">
                   (düzenlendi)
                 </span>
               )}
-              {mesaj.nickname === benimAdim && duzenlenenId !== mesaj.id && (
+              {mesaj.nickname === benimAdim &&
+                !mesaj.deleted_at &&
+                duzenlenenId !== mesaj.id && (
                 <span className="ml-auto flex shrink-0 gap-1">
                   <button
                     onClick={() => {
@@ -127,7 +129,9 @@ export default function Sohbet({
                 </span>
               )}
             </div>
-            {duzenlenenId === mesaj.id ? (
+            {mesaj.deleted_at ? (
+              <p className="italic text-soluk/70">🗑 Bu mesaj silindi</p>
+            ) : duzenlenenId === mesaj.id ? (
               <div className="mt-1 flex gap-1.5">
                 <input
                   value={duzenlemeMetni}

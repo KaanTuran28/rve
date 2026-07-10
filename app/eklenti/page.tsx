@@ -218,6 +218,42 @@ export default function EklentiSayfasi() {
           ))}
         </ol>
 
+        {/* Android'de kurulum */}
+        <div className="bilet mt-6 rounded-2xl bg-koltuk p-5">
+          <p className="font-display text-sm font-bold">
+            📱 Telefondan mı geldin? (Android)
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-soluk">
+            Normal mobil Chrome/Safari eklenti desteklemez. Android'de Play
+            Store'dan <b className="text-isik">Kiwi Browser</b> ya da{" "}
+            <b className="text-isik">Lemur Browser</b>'ı ücretsiz kur, sonra:
+          </p>
+          <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-xs leading-relaxed text-soluk">
+            <li>
+              Bu sayfayı o tarayıcıda aç ve yukarıdaki düğmeyle{" "}
+              <b className="text-isik">rve-eklenti.zip</b>'i indir (çıkarmana
+              gerek yok).
+            </li>
+            <li>
+              Adres çubuğuna{" "}
+              <code className="rounded bg-perde px-1.5 py-0.5 text-amber">
+                kiwi://extensions
+              </code>{" "}
+              yaz (Lemur'da menü → <b className="text-isik">Eklentiler</b>) ve{" "}
+              <b className="text-isik">Geliştirici modu</b>'nu aç.
+            </li>
+            <li>
+              <b className="text-isik">"+ (.zip / .crx dosyasından)"</b>{" "}
+              düğmesiyle indirdiğin zip'i seç — bu sayfadaki kutu yeşile döner.
+            </li>
+          </ol>
+          <p className="mt-2 text-xs leading-relaxed text-soluk">
+            <b className="text-isik">iPhone/iPad:</b> Safari yalnızca App
+            Store'dan imzalı eklentilere izin verdiği için kurulum mümkün değil
+            — ama YouTube senkronu ve ▶ 3-2-1 sayacı eklentisiz de çalışır.
+          </p>
+        </div>
+
         <div className="mt-8 space-y-2 text-xs leading-relaxed text-soluk">
           <p>
             <b className="text-isik">Nasıl kullanılır?</b> Odada bir video

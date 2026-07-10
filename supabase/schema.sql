@@ -27,6 +27,8 @@ create table if not exists messages (
   content text not null,
   -- Mesaj sonradan düzenlendiyse dolu
   edited_at timestamptz,
+  -- Mesaj silindiyse dolu (satır kalır, yerinde "silindi" izi gösterilir)
+  deleted_at timestamptz,
   created_at timestamptz not null default now()
 );
 
