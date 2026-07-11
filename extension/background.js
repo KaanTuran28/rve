@@ -16,6 +16,10 @@ let hepsi = false;
 let aktif = false;
 let refSayac = 1;
 let hb = null;
+// Tam ekran sohbet baloncuğundan mesaj göndermek için: takma ad site
+// köprüsünden gelir (baglan mesajındaki ad), oda id'si REST'ten çekilir
+let ad = "izleyici";
+let odaId = null;
 
 const topic = () => `realtime:oda:${kod}`;
 
@@ -51,16 +55,76 @@ function kalpAtisi() {
   }
 }
 
-function yayinla(olay) {
+function yayinla(olay, event = "senkron") {
   if (ws && ws.readyState === WebSocket.OPEN && kod) {
     ws.send(
       JSON.stringify({
         topic: topic(),
         event: "broadcast",
-        payload: { type: "broadcast", event: "senkron", payload: olay },
+        payload: { type: "broadcast", event, payload: olay },
         ref: String(refSayac++),
       })
     );
+  }
+}
+
+// Komut/mesajı izlenen sekmeye (ya da hepsi modunda tüm sekmelere) dağıt
+function sekmelereGonder(mesaj) {
+  if (!hepsi && tabId != null) {
+    chrome.tabs.sendMessage(tabId, mesaj).catch(() => {});
+  } else if (hepsi) {
+    // Hedef sekme bilinmiyor: hepsine dağıt; content script'ler kendine
+    // uymayan komutu yok sayar
+    chrome.tabs.query({}, (sekmeler) => {
+      for (const s of sekmeler) {
+        if (s.id != null) {
+          chrome.tabs.sendMessage(s.id, mesaj).catch(() => {});
+        }
+      }
+    });
+  }
+}
+
+const REST_BASLIK = {
+  apikey: ANON,
+  Authorization: `Bearer ${ANON}`,
+  "Content-Type": "application/json",
+};
+
+async function odaIdGetir() {
+  if (!kod) return null;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/rooms?code=eq.${encodeURIComponent(kod)}&select=id`,
+      { headers: REST_BASLIK }
+    );
+    const [oda] = await r.json();
+    odaId = oda ? oda.id : null;
+  } catch {
+    odaId = null;
+  }
+  return odaId;
+}
+
+// Tam ekran baloncuğundan gelen mesaj: DB'ye yaz (yenilemede kalıcı) +
+// kanala yayınla (sitedeki herkes) + kendi sekmelerimize dağıt
+// (broadcast self:false olduğundan kendi yayınımız bize geri gelmez)
+async function mesajGonder(metin) {
+  if (!kod || !metin) return;
+  if (!odaId) await odaIdGetir();
+  if (!odaId) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/messages`, {
+      method: "POST",
+      headers: { ...REST_BASLIK, Prefer: "return=representation" },
+      body: JSON.stringify({ room_id: odaId, nickname: ad, content: metin }),
+    });
+    const [satir] = await r.json();
+    if (!satir) return;
+    yayinla(satir, "mesaj");
+    sekmelereGonder({ tip: "rveMesaj", mesaj: satir });
+  } catch {
+    /* oda silinmiş ya da ağ yok — mesaj düşer */
   }
 }
 
@@ -81,13 +145,18 @@ function bildir() {
     .catch(() => {});
 }
 
-function baglan(yeniKod, yeniTab, yeniHepsi) {
+function baglan(yeniKod, yeniTab, yeniHepsi, yeniAd) {
   kapat(false);
   kod = yeniKod;
   tabId = yeniTab;
   hepsi = !!yeniHepsi;
+  if (typeof yeniAd === "string" && yeniAd.trim()) {
+    ad = yeniAd.trim().slice(0, 40);
+  }
   aktif = true;
-  chrome.storage.local.set({ kod, tabId, hepsi, aktif });
+  odaId = null;
+  odaIdGetir(); // baloncuk mesajları için oda id'sini önden çek
+  chrome.storage.local.set({ kod, tabId, hepsi, aktif, ad });
 
   ws = new WebSocket(
     `${SUPABASE_URL}/realtime/v1/websocket?apikey=${ANON}&vsn=1.0.0`
@@ -108,24 +177,14 @@ function baglan(yeniKod, yeniTab, yeniHepsi) {
       return;
     }
     if (m.event === "broadcast" && m.payload && m.payload.event === "senkron") {
-      const olay = m.payload.payload;
-      if (!hepsi && tabId != null) {
-        chrome.tabs
-          .sendMessage(tabId, { tip: "rveUygula", olay })
-          .catch(() => {});
-      } else if (hepsi) {
-        // Hedef sekme bilinmiyor: hepsine dağıt; content script'ler uygun
-        // (30 sn üstü / canlı) videosu olmayan sayfalarda komutu yok sayar
-        chrome.tabs.query({}, (sekmeler) => {
-          for (const s of sekmeler) {
-            if (s.id != null) {
-              chrome.tabs
-                .sendMessage(s.id, { tip: "rveUygula", olay })
-                .catch(() => {});
-            }
-          }
-        });
-      }
+      sekmelereGonder({ tip: "rveUygula", olay: m.payload.payload });
+    } else if (
+      m.event === "broadcast" &&
+      m.payload &&
+      m.payload.event === "mesaj"
+    ) {
+      // Sohbet mesajı: tam ekrandaki sekme kayan yazı olarak gösterir
+      sekmelereGonder({ tip: "rveMesaj", mesaj: m.payload.payload });
     }
   };
 
@@ -157,7 +216,10 @@ chrome.runtime.onMessage.addListener((msg, sender, yanit) => {
   if (msg.tip === "rveBaglan") {
     // Popup tabId verir; site köprüsünden gelince (hepsi=true) tüm sekmeler hedeflenir
     const hedefTab = msg.tabId != null ? msg.tabId : sender.tab && sender.tab.id;
-    baglan(msg.kod, hedefTab, msg.hepsi);
+    baglan(msg.kod, hedefTab, msg.hepsi, msg.ad);
+    yanit({ ok: true });
+  } else if (msg.tip === "rveMesajGonder") {
+    mesajGonder(String(msg.metin || "").trim().slice(0, 500));
     yanit({ ok: true });
   } else if (msg.tip === "rveKapat") {
     kapat(true);
@@ -190,6 +252,6 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 // Service worker yeniden başlarsa önceki bağlantıyı geri kur
-chrome.storage.local.get(["kod", "tabId", "hepsi", "aktif"]).then((s) => {
-  if (s.aktif && s.kod) baglan(s.kod, s.tabId, s.hepsi);
+chrome.storage.local.get(["kod", "tabId", "hepsi", "aktif", "ad"]).then((s) => {
+  if (s.aktif && s.kod) baglan(s.kod, s.tabId, s.hepsi, s.ad);
 });
