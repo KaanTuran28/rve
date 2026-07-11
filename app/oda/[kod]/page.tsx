@@ -70,6 +70,9 @@ export default function OdaSayfasi() {
   const tamEkranda = tamEkranTuru !== null;
   // Yabancı tam ekranın başında kısa "nasıl yazarım" ipucu
   const [fsIpucu, setFsIpucu] = useState(false);
+  // Eklenti, gömülü sitenin tam ekranında kendi sohbet katmanını kurdu mu —
+  // kurduysa bizim popover danmaku'muz basılmaz (çifte yazı olmasın)
+  const [eklentiFsUi, setEklentiFsUi] = useState(false);
   // Popover API var mı (mount'ta set: hydration uyumu)
   const [popoverVar, setPopoverVar] = useState(false);
   // Tam ekranda video üstünde kayan mesajlar (danmaku)
@@ -164,6 +167,7 @@ export default function OdaSayfasi() {
       // İpucu: yabancı tam ekranın ilk saniyelerinde nasıl yazılacağını söyle
       if (fsIpucuZamanRef.current) clearTimeout(fsIpucuZamanRef.current);
       setFsIpucu(tur === "yabanci");
+      if (tur !== "yabanci") setEklentiFsUi(false);
       if (tur === "yabanci") {
         fsIpucuZamanRef.current = setTimeout(() => setFsIpucu(false), 6000);
       }
@@ -512,7 +516,14 @@ export default function OdaSayfasi() {
   // Tarayıcı eklentisi köprüsü: content script varsa ping'e pong döner
   useEffect(() => {
     const dinle = (e: MessageEvent) => {
-      if (e.source !== window || !e.data || typeof e.data !== "object") return;
+      if (!e.data || typeof e.data !== "object") return;
+      // Gömülü sitenin frame'indeki content script'ten gelir (kaynak iframe):
+      // eklenti tam ekran sohbet katmanını kurdu/söktü
+      if (e.data.__rve === "fsSohbet") {
+        setEklentiFsUi(!!e.data.acik);
+        return;
+      }
+      if (e.source !== window) return;
       if (e.data.__rve === "pong") {
         setEklenti((d) => (d === "bagli" ? d : "var"));
       } else if (e.data.__rve === "bagliOk") {
@@ -531,8 +542,9 @@ export default function OdaSayfasi() {
   }, []);
 
   const eklentiyeBaglan = useCallback(() => {
-    window.postMessage({ __rve: "baglan", kod: odaKodu }, "*");
-  }, [odaKodu]);
+    // ad: eklentinin tam ekran baloncuğundan atılan mesajlarda görünen isim
+    window.postMessage({ __rve: "baglan", kod: odaKodu, ad }, "*");
+  }, [odaKodu, ad]);
 
   // Bağlıyken çipe tekrar basınca eklenti odadan ayrılır
   const eklentiKapat = useCallback(() => {
@@ -1176,8 +1188,8 @@ export default function OdaSayfasi() {
               popover="manual"
               className="pointer-events-none fixed inset-0 m-0 h-full w-full overflow-hidden border-0 bg-transparent p-0"
             >
-              {tamEkranTuru === "yabanci" && kayanlarKatmani}
-              {tamEkranTuru === "yabanci" && fsIpucu && (
+              {tamEkranTuru === "yabanci" && !eklentiFsUi && kayanlarKatmani}
+              {tamEkranTuru === "yabanci" && !eklentiFsUi && fsIpucu && (
                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-perde/80 px-4 py-2 text-sm text-isik shadow-lg backdrop-blur-sm">
                   💬 Sohbet mesajları burada akar — yazmak için{" "}
                   <b className="text-amber">Esc</b>, ya da tam ekrandan önce
