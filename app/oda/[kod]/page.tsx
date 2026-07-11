@@ -30,7 +30,6 @@ import HariciIzleyici from "@/components/HariciIzleyici";
 import FilmPaneli from "@/components/FilmPaneli";
 import Sohbet from "@/components/Sohbet";
 import MesajBaloncugu from "@/components/MesajBaloncugu";
-import YuzenSohbet from "@/components/YuzenSohbet";
 import Katilimcilar from "@/components/Katilimcilar";
 import KurulumEksik from "@/components/KurulumEksik";
 
@@ -1014,13 +1013,20 @@ export default function OdaSayfasi() {
       <span className="ml-2">{k.metin}</span>
     </div>
   ));
-  // Sahne (bizim ⛶) tam ekranı: baloncuk tıklanabilir — tam ekran öğesinin
-  // alt ağacında. Popover'sız eski tarayıcıda her tam ekranda burada kalır.
-  const sahneIciKatman = (tamEkranTuru === "sahne" ||
-    (!popoverVar && tamEkranda)) && (
+  // Sahne içi katman: 💬 baloncuğu HER ZAMAN sahnede (normal modda da, bizim
+  // ⛶ tam ekranında da — tam ekran öğesinin alt ağacında olduğu için
+  // tıklanabilir). Kayanlar yalnız tam ekranda eklenir; yabancı (site
+  // oynatıcısının kendi) tam ekranında ise popover katmanına gider ve baloncuk
+  // görünmez (Chromium orada tıklamayı vermiyor — 17. tur dersi).
+  const sahneIciKatman = (
     <>
-      {kayanlarKatmani}
-      <MesajBaloncugu susturuldum={susturuldum} onGonder={mesajGonder} />
+      {(tamEkranTuru === "sahne" || (!popoverVar && tamEkranda)) &&
+        kayanlarKatmani}
+      <MesajBaloncugu
+        susturuldum={susturuldum}
+        onGonder={mesajGonder}
+        onBilgi={bildirimGoster}
+      />
     </>
   );
 
@@ -1090,11 +1096,6 @@ export default function OdaSayfasi() {
               </span>
             )}
           </button>
-          <YuzenSohbet
-            susturuldum={susturuldum}
-            onGonder={mesajGonder}
-            onDesteksiz={bildirimGoster}
-          />
           {tamEkranVar && (
             <button
               onClick={tamEkran}
@@ -1179,8 +1180,8 @@ export default function OdaSayfasi() {
               {tamEkranTuru === "yabanci" && fsIpucu && (
                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-perde/80 px-4 py-2 text-sm text-isik shadow-lg backdrop-blur-sm">
                   💬 Sohbet mesajları burada akar — yazmak için{" "}
-                  <b className="text-amber">Esc</b>, ya da tam ekrandan önce{" "}
-                  <b className="text-amber">🪟 Yüzen sohbet</b>&apos;i aç
+                  <b className="text-amber">Esc</b>, ya da tam ekrandan önce
+                  💬 baloncuktan <b className="text-amber">🪟</b>&apos;yi aç
                 </div>
               )}
             </div>
