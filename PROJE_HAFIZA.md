@@ -5,7 +5,15 @@
 ## Proje nedir?
 rave.io benzeri, web'de çalışan, ticari olmayan "birlikte izleme" uygulaması. Arkadaş ortamı için: oda kur → kodu paylaş → senkronize YouTube izle + sohbet et. Film siteleri (ör. hdfilmcehennemi) için iframe + "3-2-1 senkron sayacı" yaklaşımı var. Kullanıcı: kaanturan627@gmail.com, Türkçe arayüz istendi.
 
-## Durum (2026-07-11, 20. tur)
+## Durum (2026-07-11, 21. tur)
+- ✅ **21. tur (2026-07-11): 💬 baloncuk her zaman ekranda; header'daki 🪟 düğmesi kaldırıldı.**
+  - Kullanıcı: 🪟 penceresi PC'de iyi ama mobilde popup fallback'i KOCA SEKME olarak açılıyordu → header düğmesi gitti; onun yerine 16. turdaki sürüklenebilir `MesajBaloncugu` artık **her zaman** sahnede (normal mod + bizim ⛶ tam ekranı; `YuzenSohbet.tsx` silindi, PiP/popup mantığı `MesajBaloncugu`'na taşındı).
+  - Baloncuğa dokun → mini yazma kutusu (⠿ kulp · input · ➤ · [🪟] · ✕). **🪟 popout düğmesi yalnız masaüstünde** (`matchMedia("(hover: hover) and (pointer: fine)")`) — önce Document PiP, yoksa popup (Opera GX); açılınca sayfadaki kutu kapanır, pencere kapatılınca (`pagehide`) state sıfırlanır. Mobilde 🪟 hiç yok → koca-sekme sorunu bitti.
+  - Yeni: sahne boyutu değişince (resize/fullscreenchange, rAF ile) kayıtlı konum `sinirla` ile görünür alana geri çekilir (tam ekran konumu normal modda dışarıda kalmasın).
+  - Yabancı (site oynatıcısının kendi) tam ekranında baloncuk YOK — Chromium hit-test sınırı (17. tur) değişmedi; ipucu metni "tam ekrandan önce 💬 baloncuktan 🪟'yi aç" oldu.
+  - **Doğrulama:** build temiz; E2E 19/19 (header'da 🪟 yok; baloncuk normal modda görünür + kutudan mesaj; fareyle sürükle + localStorage; 🪟 → PiP penceresi + oradan mesaj; mobil emülasyonda dokun→kutu, 🪟 yok, yeni sekme yok, mesaj A'ya; sahne tam ekranında baloncuk çalışıyor). Ekran görüntüleri + mobil taşma 0. Bir kez B'ye broadcast gecikti → bilinen Supabase gecikmesi, yenileme fallback'iyle geçti. Commit/push kullanıcıya bırakıldı.
+
+## Önceki durum (2026-07-11, 20. tur)
 - ✅ **20. tur (2026-07-11): 🪟 Yüzen sohbet incelt + Opera GX fallback'i.**
   - Kullanıcı Opera GX kullanıyor — orada `documentPictureInPicture` YOK. Yeni sıra: önce Document PiP dene (Chrome/Edge; tam ekranın da üstünde), olmuyorsa **`window.open` popup fallback** (`popup=yes,380×120`, ekranın sağ altına yakın; adı `rve-yuzen-sohbet`). Popup tam ekranın altına inebilir ama tıklayınca/görev çubuğundan öne gelir; aynı portal + stil kopyalama kodu iki yolda da ortak. İkisi de açılamazsa (popup engelleyici) bildirim.
   - Pencere **yalnız yazma satırı** (input + ➤): gelen mesajlar zaten danmaku'yla ekranda aktığı için liste kaldırıldı (kullanıcı isteği); `mesajlar`/`benimAdim` props'ları gitti (mesaj başına yeniden render de bitti). Boyut 380×120.
