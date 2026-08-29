@@ -1,4 +1,4 @@
-export type VideoTipi = "youtube" | "external";
+export type VideoTipi = "youtube" | "external" | "yuklenen" | "ekran";
 
 /** Rve tarayıcı eklentisi bu sekmede algılandı mı / odaya bağlı mı. */
 export type EklentiDurumu = "yok" | "var" | "bagli";
@@ -25,6 +25,8 @@ export interface Oda {
   locked: boolean;
   /** Oda sahibinin susturduğu takma adlar (sohbete yazamazlar). */
   muted: string[];
+  /** video_type "ekran" iken ekranını paylaşan kişinin presence kimliği. */
+  ekran_paylasan: string | null;
   updated_at: string;
   created_at: string;
 }
@@ -51,7 +53,29 @@ export type SenkronOlay =
   | { tur: "video"; url: string; videoTipi: VideoTipi; kim?: string }
   | { tur: "kuyruk"; kuyruk: KuyrukOgesi[]; kim?: string }
   | { tur: "kilit"; kilitli: boolean }
-  | { tur: "sustur"; adlar: string[] };
+  | { tur: "sustur"; adlar: string[] }
+  /** Ekran paylaşımı başladı (paylasan dolu) ya da bitti (null). */
+  | { tur: "ekran"; paylasan: string | null }
+  /** Geç katılan/yeniden bağlanan izleyici, o an paylaşım yapana "bana da bağlan" der. */
+  | { tur: "rtc-katil"; kimlik: string }
+  | {
+      tur: "rtc-teklif";
+      hedef: string;
+      kaynak: string;
+      sdp: RTCSessionDescriptionInit;
+    }
+  | {
+      tur: "rtc-yanit";
+      hedef: string;
+      kaynak: string;
+      sdp: RTCSessionDescriptionInit;
+    }
+  | {
+      tur: "rtc-aday";
+      hedef: string;
+      kaynak: string;
+      aday: RTCIceCandidateInit;
+    };
 
 export interface OynaticiKontrol {
   oynat(saniye?: number): void;

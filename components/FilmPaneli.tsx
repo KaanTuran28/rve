@@ -28,6 +28,7 @@ function FilmPaneli({
   let rozet = servis;
   if (!rozet) {
     if (videoTipi === "youtube") rozet = "YouTube";
+    else if (videoTipi === "yuklenen") rozet = "Yüklenen video";
     else {
       try {
         rozet = new URL(url).hostname.replace(/^www\./, "");
@@ -38,8 +39,8 @@ function FilmPaneli({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-cizgi bg-koltuk px-3 py-1.5">
-      <span className="shrink-0 rounded-md bg-amber/15 px-2 py-0.5 font-display text-[11px] font-semibold text-amber">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-cizgi bg-koltuk px-3 py-2">
+      <span className="shrink-0 rounded-full bg-amber/15 px-2.5 py-0.5 font-display text-[11px] font-semibold tracking-wide text-amber">
         {rozet}
       </span>
       <span className="order-last w-full min-w-0 truncate text-[11px] text-soluk sm:order-none sm:w-auto sm:flex-1">

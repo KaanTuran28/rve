@@ -6,7 +6,7 @@ create table if not exists rooms (
   code text unique not null,
   name text not null default 'Film Gecesi',
   video_url text,
-  video_type text not null default 'youtube' check (video_type in ('youtube', 'external')),
+  video_type text not null default 'youtube' check (video_type in ('youtube', 'external', 'yuklenen', 'ekran')),
   is_playing boolean not null default false,
   playback_time double precision not null default 0,
   -- Video kuyruğu: [{url, videoTipi, etiket}] dizisi
@@ -16,6 +16,8 @@ create table if not exists rooms (
   locked boolean not null default false,
   -- Oda sahibinin susturduğu takma adlar (sohbete yazamazlar)
   muted jsonb not null default '[]'::jsonb,
+  -- video_type "ekran" iken ekranını paylaşan kişinin presence kimliği
+  ekran_paylasan text,
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
@@ -69,6 +71,19 @@ create policy "messages_insert" on messages for insert with check (true);
 -- Kendi mesajını silme/düzenleme (auth yok; sahiplik kontrolü istemcide)
 create policy "messages_update" on messages for update using (true);
 create policy "messages_delete" on messages for delete using (true);
+
+-- Kişisel video yükleme: herkese açık bucket (migration `rve_oda_medya_bucket`).
+-- Auth olmadığından imzalı URL yerine public tercih edildi (mevcut RLS-herkese-açık felsefesiyle tutarlı).
+insert into storage.buckets (id, name, public)
+values ('oda-medya', 'oda-medya', true)
+on conflict (id) do nothing;
+
+create policy "oda_medya_select" on storage.objects for select
+  using (bucket_id = 'oda-medya');
+create policy "oda_medya_insert" on storage.objects for insert
+  with check (bucket_id = 'oda-medya');
+create policy "oda_medya_delete" on storage.objects for delete
+  using (bucket_id = 'oda-medya');
 
 -- Yetim oda temizliği: 24 saattir güncellenmeyen odaları saatte bir sil.
 -- (Son üyenin tarayıcısı çökerse pagehide tetiklenmez; bu job artıkları toplar.)

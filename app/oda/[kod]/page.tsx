@@ -26,7 +26,10 @@ import type {
 } from "@/lib/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import YouTubeOynatici from "@/components/YouTubeOynatici";
+import YuklenenOynatici from "@/components/YuklenenOynatici";
 import HariciIzleyici from "@/components/HariciIzleyici";
+import EkranPaylasimi from "@/components/EkranPaylasimi";
+import { baglantiKur } from "@/lib/webrtc";
 import FilmPaneli from "@/components/FilmPaneli";
 import Sohbet from "@/components/Sohbet";
 import MesajBaloncugu from "@/components/MesajBaloncugu";
@@ -85,6 +88,10 @@ export default function OdaSayfasi() {
   const [baglantiSurumu, setBaglantiSurumu] = useState(0);
   // Oda sahibi anahtarı (sadece oda kuranın tarayıcısında bulunur)
   const [sahipAnahtari, setSahipAnahtari] = useState<string | null>(null);
+  // Kişisel video dosyası Supabase Storage'a yüklenirken true (supabase-js
+  // ilerleme yüzdesi vermiyor, o yüzden belirsiz "yükleniyor" göstergesi).
+  const [dosyaYukleniyor, setDosyaYukleniyor] = useState(false);
+  const dosyaGirdiRef = useRef<HTMLInputElement>(null);
   // Presence kimliği: aynı takma adla girenler çakışmasın diye rastgele ek
   const kimlik = useMemo(
     () => (ad ? `${ad}#${Math.random().toString(36).slice(2, 6)}` : ""),
@@ -124,6 +131,26 @@ export default function OdaSayfasi() {
   const bildirimZamanRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const yazanSonaErmeRef = useRef<Map<string, number>>(new Map());
   const sonYaziyorRef = useRef(0);
+  const kimlikRef = useRef(kimlik);
+  kimlikRef.current = kimlik;
+
+  // Ekran paylaşımı: kendi yakaladığım akış (paylaşıyorsam) + karşı taraflarla
+  // kurulan bağlantılar (paylaşan için izleyici başına biri, izleyici için sahibe biri).
+  const yerelEkranAkisiRef = useRef<MediaStream | null>(null);
+  const eslerRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  // İzlerken WebRTC'den gelen canlı akış (sahne'de <video> için).
+  const [izlenenAkis, setIzlenenAkis] = useState<MediaStream | null>(null);
+  // olayIsle'ın dependency dizisini şişirmemek için WebRTC fonksiyonlarına ref'le erişilir.
+  const izleyiciyeTeklifGonderRef = useRef<(izleyici: string) => void>(() => {});
+  const teklifYanitlaRef = useRef<
+    (kaynak: string, sdp: RTCSessionDescriptionInit) => void
+  >(() => {});
+  const yanitUygulaRef = useRef<
+    (kaynak: string, sdp: RTCSessionDescriptionInit) => void
+  >(() => {});
+  const adayEkleRef = useRef<
+    (kaynak: string, aday: RTCIceCandidateInit) => void
+  >(() => {});
 
   // Takma adı ve sahip anahtarını yükle
   useEffect(() => {
@@ -349,6 +376,45 @@ export default function OdaSayfasi() {
           if (a === adRef.current)
             bildirimGoster("🔊 Susturman kaldırıldı");
         }
+      } else if (olay.tur === "ekran") {
+        setOda((onceki) =>
+          onceki
+            ? {
+                ...onceki,
+                video_type: olay.paylasan ? "ekran" : "youtube",
+                video_url: null,
+                ekran_paylasan: olay.paylasan,
+              }
+            : onceki
+        );
+        if (olay.paylasan) {
+          bildirimGoster(`🖥️ ${kimliktenAd(olay.paylasan)} ekranını paylaşıyor`);
+          if (olay.paylasan !== kimlikRef.current) {
+            kanalRef.current?.send({
+              type: "broadcast",
+              event: "senkron",
+              payload: { tur: "rtc-katil", kimlik: kimlikRef.current },
+            });
+          }
+        } else {
+          bildirimGoster("🖥️ Ekran paylaşımı bitti");
+        }
+      } else if (olay.tur === "rtc-katil") {
+        if (odaRef.current?.ekran_paylasan === kimlikRef.current) {
+          izleyiciyeTeklifGonderRef.current(olay.kimlik);
+        }
+      } else if (olay.tur === "rtc-teklif") {
+        if (olay.hedef === kimlikRef.current) {
+          teklifYanitlaRef.current(olay.kaynak, olay.sdp);
+        }
+      } else if (olay.tur === "rtc-yanit") {
+        if (olay.hedef === kimlikRef.current) {
+          yanitUygulaRef.current(olay.kaynak, olay.sdp);
+        }
+      } else if (olay.tur === "rtc-aday") {
+        if (olay.hedef === kimlikRef.current) {
+          adayEkleRef.current(olay.kaynak, olay.aday);
+        }
       }
     },
     [sistemMesaji, bildirimGoster]
@@ -395,6 +461,180 @@ export default function OdaSayfasi() {
       if (gecmis) setMesajlar([...(gecmis as Mesaj[])].reverse());
     }
   }, []);
+
+  // --- Ekran paylaşımı: WebRTC sinyalleşmesi mevcut broadcast kanalından gider ---
+
+  function adayGonder(hedef: string, aday: RTCIceCandidate) {
+    kanalRef.current?.send({
+      type: "broadcast",
+      event: "senkron",
+      payload: {
+        tur: "rtc-aday",
+        hedef,
+        kaynak: kimlikRef.current,
+        aday: aday.toJSON(),
+      },
+    });
+  }
+
+  // Paylaşan taraf: bir izleyiciye (yeni katılan ya da rtc-katil isteyen) teklif gönderir.
+  const izleyiciyeTeklifGonder = useCallback(async (izleyici: string) => {
+    const akis = yerelEkranAkisiRef.current;
+    if (!akis) return;
+    eslerRef.current.get(izleyici)?.close();
+    const pc = baglantiKur(
+      (aday) => adayGonder(izleyici, aday),
+      () => {} // paylaşan izlemiyor
+    );
+    eslerRef.current.set(izleyici, pc);
+    for (const parca of akis.getTracks()) pc.addTrack(parca, akis);
+    const teklif = await pc.createOffer();
+    await pc.setLocalDescription(teklif);
+    kanalRef.current?.send({
+      type: "broadcast",
+      event: "senkron",
+      payload: {
+        tur: "rtc-teklif",
+        hedef: izleyici,
+        kaynak: kimlikRef.current,
+        sdp: teklif,
+      },
+    });
+  }, []);
+  izleyiciyeTeklifGonderRef.current = izleyiciyeTeklifGonder;
+
+  // İzleyen taraf: gelen teklife yanıt üretir, akışı izlenenAkis'e bağlar.
+  const teklifYanitla = useCallback(
+    async (kaynak: string, sdp: RTCSessionDescriptionInit) => {
+      eslerRef.current.get(kaynak)?.close();
+      const pc = baglantiKur(
+        (aday) => adayGonder(kaynak, aday),
+        (akis) => setIzlenenAkis(akis)
+      );
+      eslerRef.current.set(kaynak, pc);
+      await pc.setRemoteDescription(sdp);
+      const yanit = await pc.createAnswer();
+      await pc.setLocalDescription(yanit);
+      kanalRef.current?.send({
+        type: "broadcast",
+        event: "senkron",
+        payload: {
+          tur: "rtc-yanit",
+          hedef: kaynak,
+          kaynak: kimlikRef.current,
+          sdp: yanit,
+        },
+      });
+    },
+    []
+  );
+  teklifYanitlaRef.current = teklifYanitla;
+
+  // Paylaşan taraf: izleyicinin yanıtını kendi bağlantısına uygular.
+  const yanitUygula = useCallback(
+    async (kaynak: string, sdp: RTCSessionDescriptionInit) => {
+      await eslerRef.current.get(kaynak)?.setRemoteDescription(sdp);
+    },
+    []
+  );
+  yanitUygulaRef.current = yanitUygula;
+
+  const adayEkle = useCallback(
+    async (kaynak: string, aday: RTCIceCandidateInit) => {
+      try {
+        await eslerRef.current.get(kaynak)?.addIceCandidate(aday);
+      } catch {
+        /* geç gelen/eşleşmeyen aday — yok sayılır */
+      }
+    },
+    []
+  );
+  adayEkleRef.current = adayEkle;
+
+  // video_type "ekran"dan çıkınca (paylaşan durdurdu, biri başka video/dosya açtı,
+  // ya da ben ayrıldım) kendi yakaladığım akışı ve tüm bağlantıları temizle.
+  useEffect(() => {
+    if (oda?.video_type === "ekran") return;
+    if (yerelEkranAkisiRef.current) {
+      yerelEkranAkisiRef.current.getTracks().forEach((parca) => parca.stop());
+      yerelEkranAkisiRef.current = null;
+    }
+    if (eslerRef.current.size > 0) {
+      for (const pc of eslerRef.current.values()) pc.close();
+      eslerRef.current.clear();
+    }
+    setIzlenenAkis((onceki) => (onceki ? null : onceki));
+  }, [oda?.video_type]);
+
+  // Sayfadan tamamen ayrılınca (route değişimi/kapatma) da aynı temizlik.
+  useEffect(() => {
+    return () => {
+      yerelEkranAkisiRef.current?.getTracks().forEach((parca) => parca.stop());
+      for (const pc of eslerRef.current.values()) pc.close();
+    };
+  }, []);
+
+  async function ekranPaylasimiBaslat() {
+    if (!oda || !supabase || kilitli) return;
+    let akis: MediaStream;
+    try {
+      akis = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    } catch {
+      return; // izin verilmedi ya da iptal edildi
+    }
+    yerelEkranAkisiRef.current = akis;
+    // Kullanıcı paylaşımı tarayıcının kendi "Paylaşımı durdur" çubuğundan keserse
+    akis.getVideoTracks()[0].addEventListener("ended", () => ekranPaylasimiDurdur());
+    const mevcut = odaRef.current;
+    if (!mevcut) return;
+    setOda({
+      ...mevcut,
+      video_type: "ekran",
+      video_url: null,
+      ekran_paylasan: kimlikRef.current,
+    });
+    kanalRef.current?.send({
+      type: "broadcast",
+      event: "senkron",
+      payload: { tur: "ekran", paylasan: kimlikRef.current },
+    });
+    await supabase
+      .from("rooms")
+      .update({
+        video_type: "ekran",
+        video_url: null,
+        ekran_paylasan: kimlikRef.current,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", mevcut.id);
+  }
+
+  function ekranPaylasimiDurdur() {
+    const mevcut = odaRef.current;
+    if (!mevcut || !supabase || mevcut.ekran_paylasan !== kimlikRef.current) {
+      return;
+    }
+    setOda({
+      ...mevcut,
+      video_type: "youtube",
+      video_url: null,
+      ekran_paylasan: null,
+    });
+    kanalRef.current?.send({
+      type: "broadcast",
+      event: "senkron",
+      payload: { tur: "ekran", paylasan: null },
+    });
+    supabase
+      .from("rooms")
+      .update({
+        video_type: "youtube",
+        video_url: null,
+        ekran_paylasan: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", mevcut.id);
+  }
 
   // Gerçek zamanlı kanal (oda başına bir tane; baglantiSurumu artınca yeniden kurulur)
   useEffect(() => {
@@ -454,8 +694,25 @@ export default function OdaSayfasi() {
         if (kanalDurumu === "SUBSCRIBED") {
           baglantiZamaniRef.current = Date.now();
           kanal.track({ katildi: Date.now() });
+          // Ekran paylaşımı zaten sürüyorsa (yeni katıldım ya da yeniden
+          // bağlandım) paylaşana "bana da bağlan" de.
+          const ekranKatilKontrol = () => {
+            const o = odaRef.current;
+            if (
+              o?.video_type === "ekran" &&
+              o.ekran_paylasan &&
+              o.ekran_paylasan !== kimlikRef.current
+            ) {
+              kanalRef.current?.send({
+                type: "broadcast",
+                event: "senkron",
+                payload: { tur: "rtc-katil", kimlik: kimlikRef.current },
+              });
+            }
+          };
           // Yeniden bağlandıysak kopuklukta kaçanları DB'den topla
-          if (baglantiSurumu > 0) durumTazele(true);
+          if (baglantiSurumu > 0) durumTazele(true).then(ekranKatilKontrol);
+          else ekranKatilKontrol();
         } else if (
           !kapatildi &&
           !yenidenPlanlandi &&
@@ -709,6 +966,33 @@ export default function OdaSayfasi() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", mevcut.id);
+  }
+
+  const MAKS_DOSYA_BOYUTU = 400 * 1024 * 1024; // 400MB — Supabase ücretsiz katman toplam depolamayı göz önünde bulundurur
+
+  async function dosyaYukle(dosya: File) {
+    if (!oda || !supabase || kilitli || dosyaYukleniyor) return;
+    if (!dosya.type.startsWith("video/")) {
+      bildirimGoster("⚠️ Sadece video dosyası yükleyebilirsin");
+      return;
+    }
+    if (dosya.size > MAKS_DOSYA_BOYUTU) {
+      bildirimGoster("⚠️ Dosya çok büyük — en fazla 400MB");
+      return;
+    }
+    setDosyaYukleniyor(true);
+    const uzanti = dosya.name.split(".").pop() || "mp4";
+    const yol = `${oda.id}/${crypto.randomUUID()}.${uzanti}`;
+    const { error } = await supabase.storage
+      .from("oda-medya")
+      .upload(yol, dosya, { contentType: dosya.type || "video/mp4" });
+    setDosyaYukleniyor(false);
+    if (error) {
+      bildirimGoster("⚠️ Yükleme başarısız: " + error.message);
+      return;
+    }
+    const { data } = supabase.storage.from("oda-medya").getPublicUrl(yol);
+    await videoyuUygula(data.publicUrl, "yuklenen", oda.queue ?? []);
   }
 
   async function videoDegistir() {
@@ -1044,7 +1328,7 @@ export default function OdaSayfasi() {
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="flex items-center gap-2 border-b border-cizgi bg-koltuk px-3 py-2.5 sm:gap-3 sm:px-4">
+      <header className="flex items-center gap-2 border-b border-cizgi bg-koltuk px-3 py-3 sm:gap-3 sm:px-4">
         <Link
           href="/"
           className="font-display text-lg font-bold tracking-tight"
@@ -1054,7 +1338,7 @@ export default function OdaSayfasi() {
         <span className="hidden truncate text-sm text-soluk sm:block">
           {oda?.name}
         </span>
-        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+        <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
           {sahibim && (
             <button
               onClick={kilidiDegistir}
@@ -1090,17 +1374,23 @@ export default function OdaSayfasi() {
           >
             {kopyalandi ? "✓" : odaKodu}
           </button>
+
+          <span
+            aria-hidden
+            className="mx-0.5 hidden h-5 w-px bg-cizgi sm:block"
+          />
+
           <button
             onClick={() => {
               setSinemaModu((s) => !s);
               setOkunmamis(0);
             }}
-            className="relative rounded-lg border border-cizgi px-2 py-1.5 text-xs text-isik transition hover:border-amber/60 sm:px-3"
+            className="relative rounded-lg px-2 py-1.5 text-xs text-soluk transition hover:bg-kadife hover:text-isik sm:px-2.5"
             title={sinemaModu ? "Sohbeti göster" : "Sinema modu: sohbeti gizle"}
           >
             <span className="sm:hidden">{sinemaModu ? "💬" : "🎬"}</span>
             <span className="hidden sm:inline">
-              {sinemaModu ? "Sohbeti göster" : "Sinema modu"}
+              {sinemaModu ? "💬 Sohbeti göster" : "🎬 Sinema modu"}
             </span>
             {sinemaModu && okunmamis > 0 && (
               <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber px-1 text-[10px] font-bold leading-none text-perde">
@@ -1111,15 +1401,18 @@ export default function OdaSayfasi() {
           {tamEkranVar && (
             <button
               onClick={tamEkran}
-              className="rounded-lg border border-cizgi px-2 py-1.5 text-xs text-isik transition hover:border-amber/60 sm:px-3"
+              className="rounded-lg px-2 py-1.5 text-xs text-soluk transition hover:bg-kadife hover:text-isik sm:px-2.5"
               title="Tam ekran"
             >
               ⛶<span className="hidden sm:inline"> Tam ekran</span>
             </button>
           )}
+
+          <span aria-hidden className="mx-0.5 h-5 w-px bg-cizgi" />
+
           <button
             onClick={cikisYap}
-            className="rounded-lg border border-cizgi px-2 py-1.5 text-xs text-soluk transition hover:border-red-500/60 hover:text-red-400 sm:px-3"
+            className="rounded-lg px-2 py-1.5 text-xs text-soluk transition hover:text-red-400 sm:px-2.5"
             title="Odadan ayrıl (son kişiysen oda silinir)"
           >
             Çıkış
@@ -1140,11 +1433,33 @@ export default function OdaSayfasi() {
             />
           )}
           <div ref={sahneRef} className="relative min-h-0 flex-1 bg-black">
-            {oda?.video_url ? (
+            {oda?.video_type === "ekran" ? (
+              <EkranPaylasimi
+                benimKimlik={kimlik}
+                paylasan={oda.ekran_paylasan}
+                paylasanAdi={
+                  oda.ekran_paylasan ? kimliktenAd(oda.ekran_paylasan) : null
+                }
+                akis={izlenenAkis}
+                onDurdur={ekranPaylasimiDurdur}
+              />
+            ) : oda?.video_url ? (
               youtubeModu ? (
                 <YouTubeOynatici
                   ref={oynaticiRef}
                   videoId={ytId!}
+                  baslangicSaniye={baslangicSaniyeRef.current}
+                  baslangicTs={baslangicTsRef.current}
+                  otomatikBaslat={otomatikBaslatRef.current}
+                  kilitli={kilitli}
+                  onYerelOlay={yerelOlay}
+                  onKilitliDeneme={kilitliDeneme}
+                  onBitti={videoBitti}
+                />
+              ) : oda.video_type === "yuklenen" ? (
+                <YuklenenOynatici
+                  ref={oynaticiRef}
+                  url={oda.video_url}
                   baslangicSaniye={baslangicSaniyeRef.current}
                   baslangicTs={baslangicTsRef.current}
                   otomatikBaslat={otomatikBaslatRef.current}
@@ -1166,8 +1481,9 @@ export default function OdaSayfasi() {
                   Perde kapalı
                 </p>
                 <p className="max-w-sm text-sm text-soluk">
-                  Aşağıya bir YouTube linki ya da film sitesi adresi yapıştır —
-                  odadaki herkeste aynı anda açılır.
+                  Aşağıya bir YouTube linki ya da film sitesi adresi yapıştır,
+                  kendi video dosyanı yükle ya da ekranını paylaş — odadaki
+                  herkeste aynı anda açılır.
                 </p>
               </div>
             )}
@@ -1199,7 +1515,11 @@ export default function OdaSayfasi() {
             </div>
           )}
 
-          <div className="flex flex-wrap gap-2 border-t border-cizgi bg-koltuk p-3">
+          <div
+            className={`flex flex-wrap gap-2 border-t border-cizgi bg-koltuk p-3 ${
+              kuyruk.length > 0 ? "pb-2" : ""
+            }`}
+          >
             <input
               value={videoGirdi}
               onChange={(e) => setVideoGirdi(e.target.value)}
@@ -1227,7 +1547,34 @@ export default function OdaSayfasi() {
             >
               ＋ Sıraya
             </button>
-            {youtubeModu && (
+            <input
+              ref={dosyaGirdiRef}
+              type="file"
+              accept="video/*"
+              hidden
+              onChange={(e) => {
+                const dosya = e.target.files?.[0];
+                e.target.value = "";
+                if (dosya) dosyaYukle(dosya);
+              }}
+            />
+            <button
+              onClick={() => dosyaGirdiRef.current?.click()}
+              disabled={kilitli || dosyaYukleniyor}
+              title="Kendi bilgisayarındaki bir video dosyasını yükle — odadaki herkes senkron izler"
+              className="rounded-lg border border-cizgi px-3 py-2 text-sm text-isik transition hover:border-amber/60 hover:text-amber active:scale-95 disabled:opacity-50"
+            >
+              {dosyaYukleniyor ? "⏳ Yükleniyor…" : "📁 Dosya yükle"}
+            </button>
+            <button
+              onClick={ekranPaylasimiBaslat}
+              disabled={kilitli || oda?.video_type === "ekran"}
+              title="Ekranını paylaş — odadaki herkes canlı izler"
+              className="rounded-lg border border-cizgi px-3 py-2 text-sm text-isik transition hover:border-amber/60 hover:text-amber active:scale-95 disabled:opacity-50"
+            >
+              🖥️ Ekranını paylaş
+            </button>
+            {(youtubeModu || oda?.video_type === "yuklenen") && (
               <button
                 onClick={senkronla}
                 title="Görüntün kaydıysa herkesle yeniden hizala"
@@ -1239,7 +1586,7 @@ export default function OdaSayfasi() {
           </div>
 
           {kuyruk.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 border-t border-cizgi bg-koltuk px-3 pb-2.5 pt-0.5">
+            <div className="flex flex-wrap items-center gap-1.5 bg-koltuk px-3 pb-2.5">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-soluk">
                 Sırada
               </span>
