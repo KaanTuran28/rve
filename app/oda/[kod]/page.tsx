@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
   supabase,
+  odaIstemcisi,
+  ODA_BASLIGI,
   supabaseUrl,
   supabaseAnonKey,
   takmaAdOku,
@@ -42,6 +44,8 @@ export default function OdaSayfasi() {
   const { kod } = useParams<{ kod: string }>();
   const router = useRouter();
   const odaKodu = (kod ?? "").toUpperCase();
+  // Tablo/Storage istekleri oda kodunu başlıkta taşır (RLS buna göre izin verir)
+  const db = useMemo(() => odaIstemcisi(odaKodu), [odaKodu]);
 
   const [durum, setDurum] = useState<Durum>("yukleniyor");
   const [oda, setOda] = useState<Oda | null>(null);
@@ -267,10 +271,10 @@ export default function OdaSayfasi() {
 
   // Odayı ve mesaj geçmişini yükle
   useEffect(() => {
-    if (!supabase || !odaKodu) return;
+    if (!db || !odaKodu) return;
     let iptal = false;
     (async () => {
-      const { data } = await supabase!
+      const { data } = await db!
         .from("rooms")
         .select("*")
         .eq("code", odaKodu)
@@ -292,7 +296,7 @@ export default function OdaSayfasi() {
       setOda(odaVerisi);
       setDurum("hazir");
 
-      const { data: gecmis } = await supabase!
+      const { data: gecmis } = await db!
         .from("messages")
         .select("*")
         .eq("room_id", odaVerisi.id)
@@ -303,7 +307,7 @@ export default function OdaSayfasi() {
     return () => {
       iptal = true;
     };
-  }, [odaKodu]);
+  }, [odaKodu, db]);
 
   // Yerel "katıldı/ayrıldı" bildirimi
   const sistemMesaji = useCallback((icerik: string) => {
@@ -423,8 +427,8 @@ export default function OdaSayfasi() {
   // Odanın güncel halini DB'den çekip yerel durumu hizalar.
   // Kopukluk sonrası ve sekme öne gelince çağrılır; kaçırılan broadcast'leri telafi eder.
   const durumTazele = useCallback(async (mesajlariTazele = false) => {
-    if (!supabase || !odaIdRef.current) return;
-    const { data } = await supabase
+    if (!db || !odaIdRef.current) return;
+    const { data } = await db
       .from("rooms")
       .select("*")
       .eq("id", odaIdRef.current)
@@ -452,7 +456,7 @@ export default function OdaSayfasi() {
       }
     }
     if (mesajlariTazele) {
-      const { data: gecmis } = await supabase
+      const { data: gecmis } = await db
         .from("messages")
         .select("*")
         .eq("room_id", odaIdRef.current)
@@ -460,7 +464,7 @@ export default function OdaSayfasi() {
         .limit(100);
       if (gecmis) setMesajlar([...(gecmis as Mesaj[])].reverse());
     }
-  }, []);
+  }, [db]);
 
   // --- Ekran paylaşımı: WebRTC sinyalleşmesi mevcut broadcast kanalından gider ---
 
@@ -575,7 +579,7 @@ export default function OdaSayfasi() {
   }, []);
 
   async function ekranPaylasimiBaslat() {
-    if (!oda || !supabase || kilitli) return;
+    if (!oda || !db || kilitli) return;
     let akis: MediaStream;
     try {
       akis = await navigator.mediaDevices.getDisplayMedia({ video: true });
@@ -598,7 +602,7 @@ export default function OdaSayfasi() {
       event: "senkron",
       payload: { tur: "ekran", paylasan: kimlikRef.current },
     });
-    await supabase
+    await db
       .from("rooms")
       .update({
         video_type: "ekran",
@@ -611,7 +615,7 @@ export default function OdaSayfasi() {
 
   function ekranPaylasimiDurdur() {
     const mevcut = odaRef.current;
-    if (!mevcut || !supabase || mevcut.ekran_paylasan !== kimlikRef.current) {
+    if (!mevcut || !db || mevcut.ekran_paylasan !== kimlikRef.current) {
       return;
     }
     setOda({
@@ -625,7 +629,7 @@ export default function OdaSayfasi() {
       event: "senkron",
       payload: { tur: "ekran", paylasan: null },
     });
-    supabase
+    db
       .from("rooms")
       .update({
         video_type: "youtube",
@@ -823,8 +827,8 @@ export default function OdaSayfasi() {
     if (eklentiRef.current === "bagli") {
       window.postMessage({ __rve: "kapat" }, "*");
     }
-    if (sonUyeyMiyim() && supabase && odaIdRef.current) {
-      await supabase.from("rooms").delete().eq("id", odaIdRef.current);
+    if (sonUyeyMiyim() && db && odaIdRef.current) {
+      await db.from("rooms").delete().eq("id", odaIdRef.current);
     }
     if (kanal) {
       await kanal.untrack().catch(() => {});
@@ -832,7 +836,7 @@ export default function OdaSayfasi() {
     }
     kanalRef.current = null;
     router.push("/");
-  }, [sonUyeyMiyim, router]);
+  }, [sonUyeyMiyim, router, db]);
 
   // Sekme kapanırken son üyeysem keepalive fetch ile odayı sil (async client'a güvenilmez)
   useEffect(() => {
@@ -847,13 +851,14 @@ export default function OdaSayfasi() {
           apikey: supabaseAnonKey,
           Authorization: `Bearer ${supabaseAnonKey}`,
           Prefer: "return=minimal",
+          [ODA_BASLIGI]: odaKodu,
         },
         keepalive: true,
       }).catch(() => {});
     };
     window.addEventListener("pagehide", temizle);
     return () => window.removeEventListener("pagehide", temizle);
-  }, [sonUyeyMiyim]);
+  }, [sonUyeyMiyim, odaKodu]);
 
   // Kilitliyken oynat/duraklat denemesi: oynatıcı kendini geri aldı, haber ver
   const kilitliDeneme = useCallback(() => {
@@ -884,10 +889,10 @@ export default function OdaSayfasi() {
     });
     if (
       (olay.tur === "oynat" || olay.tur === "duraklat") &&
-      supabase &&
+      db &&
       odaIdRef.current
     ) {
-      supabase
+      db
         .from("rooms")
         .update({
           is_playing: olay.tur === "oynat",
@@ -897,7 +902,7 @@ export default function OdaSayfasi() {
         .eq("id", odaIdRef.current)
         .then(() => {});
     }
-  }, [bildirimGoster, durumTazele]);
+  }, [bildirimGoster, durumTazele, db]);
 
   // Girdiyi güvenli bir URL'ye çözer; http(s) dışı her şeyde null (javascript: vb.)
   function girdiCozumle(girdi: string): {
@@ -933,7 +938,7 @@ export default function OdaSayfasi() {
     yeniKuyruk: KuyrukOgesi[]
   ) {
     const mevcut = odaRef.current;
-    if (!mevcut || !supabase) return;
+    if (!mevcut || !db) return;
     baslangicSaniyeRef.current = 0;
     otomatikBaslatRef.current = false;
     setOda({
@@ -955,7 +960,7 @@ export default function OdaSayfasi() {
       event: "senkron",
       payload: { tur: "kuyruk", kuyruk: yeniKuyruk },
     });
-    await supabase
+    await db
       .from("rooms")
       .update({
         video_url: url,
@@ -971,7 +976,7 @@ export default function OdaSayfasi() {
   const MAKS_DOSYA_BOYUTU = 400 * 1024 * 1024; // 400MB — Supabase ücretsiz katman toplam depolamayı göz önünde bulundurur
 
   async function dosyaYukle(dosya: File) {
-    if (!oda || !supabase || kilitli || dosyaYukleniyor) return;
+    if (!oda || !db || kilitli || dosyaYukleniyor) return;
     if (!dosya.type.startsWith("video/")) {
       bildirimGoster("⚠️ Sadece video dosyası yükleyebilirsin");
       return;
@@ -983,7 +988,7 @@ export default function OdaSayfasi() {
     setDosyaYukleniyor(true);
     const uzanti = dosya.name.split(".").pop() || "mp4";
     const yol = `${oda.id}/${crypto.randomUUID()}.${uzanti}`;
-    const { error } = await supabase.storage
+    const { error } = await db.storage
       .from("oda-medya")
       .upload(yol, dosya, { contentType: dosya.type || "video/mp4" });
     setDosyaYukleniyor(false);
@@ -991,7 +996,7 @@ export default function OdaSayfasi() {
       bildirimGoster("⚠️ Yükleme başarısız: " + error.message);
       return;
     }
-    const { data } = supabase.storage.from("oda-medya").getPublicUrl(yol);
+    const { data } = db.storage.from("oda-medya").getPublicUrl(yol);
     await videoyuUygula(data.publicUrl, "yuklenen", oda.queue ?? []);
   }
 
@@ -1010,14 +1015,14 @@ export default function OdaSayfasi() {
   // Kuyruğu yerel + broadcast + DB olarak yazar
   async function kuyrukYaz(yeniKuyruk: KuyrukOgesi[]) {
     const mevcut = odaRef.current;
-    if (!mevcut || !supabase) return;
+    if (!mevcut || !db) return;
     setOda({ ...mevcut, queue: yeniKuyruk });
     kanalRef.current?.send({
       type: "broadcast",
       event: "senkron",
       payload: { tur: "kuyruk", kuyruk: yeniKuyruk, kim: adRef.current },
     });
-    await supabase
+    await db
       .from("rooms")
       .update({ queue: yeniKuyruk })
       .eq("id", mevcut.id);
@@ -1074,11 +1079,11 @@ export default function OdaSayfasi() {
   // güncelleme (video_url hâlâ eskiyse) sayesinde sadece ilk yazan kazanır.
   const videoBitti = useCallback(async () => {
     const mevcut = odaRef.current;
-    if (!mevcut || !supabase || !mevcut.video_url) return;
+    if (!mevcut || !db || !mevcut.video_url) return;
     const kuyruk = mevcut.queue ?? [];
     if (kuyruk.length === 0) return;
     const [siradaki, ...kalan] = kuyruk;
-    const { data } = await supabase
+    const { data } = await db
       .from("rooms")
       .update({
         video_url: siradaki.url,
@@ -1106,12 +1111,12 @@ export default function OdaSayfasi() {
       event: "senkron",
       payload: { tur: "kuyruk", kuyruk: kalan },
     });
-  }, [bildirimGoster]);
+  }, [bildirimGoster, db]);
 
   // Oda sahibi kilidi aç/kapat
   async function kilidiDegistir() {
     const mevcut = odaRef.current;
-    if (!mevcut || !supabase || !sahibim) return;
+    if (!mevcut || !db || !sahibim) return;
     const yeni = !mevcut.locked;
     setOda({ ...mevcut, locked: yeni });
     kanalRef.current?.send({
@@ -1119,12 +1124,12 @@ export default function OdaSayfasi() {
       event: "senkron",
       payload: { tur: "kilit", kilitli: yeni },
     });
-    await supabase.from("rooms").update({ locked: yeni }).eq("id", mevcut.id);
+    await db.from("rooms").update({ locked: yeni }).eq("id", mevcut.id);
   }
 
   async function mesajGonder(metin: string) {
-    if (!oda || !supabase || susturuldumRef.current) return;
-    const { data } = await supabase
+    if (!oda || !db || susturuldumRef.current) return;
+    const { data } = await db
       .from("messages")
       .insert({ room_id: oda.id, nickname: ad, content: metin })
       .select()
@@ -1137,7 +1142,7 @@ export default function OdaSayfasi() {
 
   // Kendi mesajını sil: içerik temizlenir, yerinde "silindi" izi kalır
   async function mesajSil(id: string) {
-    if (!supabase) return;
+    if (!db) return;
     const deleted_at = new Date().toISOString();
     setMesajlar((m) =>
       m.map((x) => (x.id === id ? { ...x, content: "silindi", deleted_at } : x))
@@ -1147,7 +1152,7 @@ export default function OdaSayfasi() {
       event: "mesajSil",
       payload: { id, deleted_at },
     });
-    await supabase
+    await db
       .from("messages")
       .update({ content: "silindi", deleted_at })
       .eq("id", id);
@@ -1155,7 +1160,7 @@ export default function OdaSayfasi() {
 
   // Kendi mesajını düzenle: içerik + düzenlendi damgası
   async function mesajDuzenle(id: string, metin: string) {
-    if (!supabase) return;
+    if (!db) return;
     const edited_at = new Date().toISOString();
     setMesajlar((m) =>
       m.map((x) => (x.id === id ? { ...x, content: metin, edited_at } : x))
@@ -1165,7 +1170,7 @@ export default function OdaSayfasi() {
       event: "mesajDuzenle",
       payload: { id, content: metin, edited_at },
     });
-    await supabase
+    await db
       .from("messages")
       .update({ content: metin, edited_at })
       .eq("id", id);
@@ -1174,7 +1179,7 @@ export default function OdaSayfasi() {
   // Oda sahibi: kişiyi sustur / susturmayı kaldır (takma ada göre)
   async function susturDegistir(hedefAd: string) {
     const mevcut = odaRef.current;
-    if (!mevcut || !supabase || !sahibim) return;
+    if (!mevcut || !db || !sahibim) return;
     const liste = mevcut.muted ?? [];
     const susturuluyor = !liste.includes(hedefAd);
     const yeni = susturuluyor
@@ -1191,7 +1196,7 @@ export default function OdaSayfasi() {
       event: "senkron",
       payload: { tur: "sustur", adlar: yeni },
     });
-    await supabase.from("rooms").update({ muted: yeni }).eq("id", mevcut.id);
+    await db.from("rooms").update({ muted: yeni }).eq("id", mevcut.id);
   }
 
   // Odanın kalıcı durumunu okuyup kendi oynatıcını herkese hizalar

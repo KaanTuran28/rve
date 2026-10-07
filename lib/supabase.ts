@@ -11,6 +11,34 @@ export const supabaseAnonKey = anonKey ?? null;
 export const supabase: SupabaseClient | null =
   url && anonKey ? createClient(url, anonKey) : null;
 
+/** Oda kodu başlığı: RLS, tablolara yalnız bu koddaki oda (ve mesajları) için izin verir. */
+export const ODA_BASLIGI = "x-rve-oda";
+
+const odaIstemcileri = new Map<string, SupabaseClient>();
+
+/**
+ * Tablo ve Storage istekleri için oda kodunu her isteğe ekleyen istemci (kod
+ * başına bir tane). Realtime kanalları ortak `supabase` istemcisinde kalır.
+ */
+export function odaIstemcisi(kod: string): SupabaseClient | null {
+  if (!url || !anonKey || !kod) return null;
+  const anahtar = kod.toUpperCase();
+  let istemci = odaIstemcileri.get(anahtar);
+  if (!istemci) {
+    istemci = createClient(url, anonKey, {
+      global: { headers: { [ODA_BASLIGI]: anahtar } },
+      // Oturum yok (auth kullanılmıyor); ayrı anahtar "Multiple GoTrueClient" uyarısını önler
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        storageKey: `rve-oda-${anahtar}`,
+      },
+    });
+    odaIstemcileri.set(anahtar, istemci);
+  }
+  return istemci;
+}
+
 const KOD_HARFLERI = "ABCDEFGHJKLMNPQRSTUVYZ23456789";
 
 export function kodUret(uzunluk = 6): string {

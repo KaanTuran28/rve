@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   supabase,
+  odaIstemcisi,
   kodUret,
   takmaAdOku,
   takmaAdKaydet,
@@ -41,7 +42,7 @@ export default function AnaSayfa() {
     const kod = kodUret();
     // Sahip anahtarı: sadece kuranın tarayıcısında durur, kilit yetkisi verir
     const sahipAnahtari = crypto.randomUUID();
-    const { error } = await supabase!.from("rooms").insert({
+    const { error } = await odaIstemcisi(kod)!.from("rooms").insert({
       code: kod,
       name: odaAdi.trim() || `${ad.trim()} film gecesi`,
       owner_token: sahipAnahtari,
@@ -64,7 +65,7 @@ export default function AnaSayfa() {
     }
     setMesgul(true);
     setHata("");
-    const { data } = await supabase!
+    const { data } = await odaIstemcisi(kod)!
       .from("rooms")
       .select("code")
       .eq("code", kod)

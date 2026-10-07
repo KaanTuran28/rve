@@ -36,8 +36,8 @@ create table if not exists messages (
 
 create index if not exists messages_room_idx on messages (room_id, created_at);
 
--- Veri hijyeni: RLS herkese açık olduğundan doğrudan REST kötüye kullanımına
--- karşı en azından boyut/biçim sınırları (migration: rve_veri_kisitlari)
+-- Veri hijyeni: oda kodunu bilen doğrudan REST'e yazabildiğinden kötüye
+-- kullanıma karşı boyut/biçim sınırları (migration: rve_veri_kisitlari)
 alter table messages
   add constraint messages_content_uzunluk check (char_length(content) between 1 and 500),
   add constraint messages_nickname_uzunluk check (char_length(nickname) between 1 and 40);
@@ -58,32 +58,66 @@ alter table rooms
     jsonb_typeof(muted) = 'array' and jsonb_array_length(muted) <= 100
   );
 
--- Kimlik doğrulama yok (arkadaş ortamı): anon anahtarla okuma/yazma serbest.
+-- Kimlik doğrulama yok (arkadaş ortamı): oda kodunu bilen = odanın üyesi.
+-- İstemci her tablo isteğinde kodu `x-rve-oda` başlığıyla gönderir; kodu
+-- bilmeyen hiçbir odayı/mesajı göremez, değiştiremez, silemez
+-- (migration: rve_oda_kodu_rls).
 alter table rooms enable row level security;
 alter table messages enable row level security;
 
-create policy "rooms_select" on rooms for select using (true);
-create policy "rooms_insert" on rooms for insert with check (true);
-create policy "rooms_update" on rooms for update using (true);
-create policy "rooms_delete" on rooms for delete using (true);
-create policy "messages_select" on messages for select using (true);
-create policy "messages_insert" on messages for insert with check (true);
--- Kendi mesajını silme/düzenleme (auth yok; sahiplik kontrolü istemcide)
-create policy "messages_update" on messages for update using (true);
-create policy "messages_delete" on messages for delete using (true);
+create or replace function public.rve_istek_kodu()
+returns text
+language sql
+stable
+set search_path = ''
+as $$
+  select nullif(
+    upper(coalesce(nullif(current_setting('request.headers', true), ''), '{}')::json ->> 'x-rve-oda'),
+    ''
+  )
+$$;
+
+create policy "rooms_select" on rooms for select to anon, authenticated
+  using (code = (select public.rve_istek_kodu()));
+create policy "rooms_insert" on rooms for insert to anon, authenticated
+  with check (code = (select public.rve_istek_kodu()));
+create policy "rooms_update" on rooms for update to anon, authenticated
+  using (code = (select public.rve_istek_kodu()))
+  with check (code = (select public.rve_istek_kodu()));
+create policy "rooms_delete" on rooms for delete to anon, authenticated
+  using (code = (select public.rve_istek_kodu()));
+
+create policy "messages_select" on messages for select to anon, authenticated
+  using (exists (
+    select 1 from rooms r
+    where r.id = room_id and r.code = (select public.rve_istek_kodu())
+  ));
+create policy "messages_insert" on messages for insert to anon, authenticated
+  with check (exists (
+    select 1 from rooms r
+    where r.id = room_id and r.code = (select public.rve_istek_kodu())
+  ));
+-- Düzenleme ve "silindi" işareti (sahiplik kontrolü istemcide). Sert silme
+-- politikası bilinçli yok: oda silinince mesajlar FK cascade ile gider.
+create policy "messages_update" on messages for update to anon, authenticated
+  using (exists (
+    select 1 from rooms r
+    where r.id = room_id and r.code = (select public.rve_istek_kodu())
+  ))
+  with check (exists (
+    select 1 from rooms r
+    where r.id = room_id and r.code = (select public.rve_istek_kodu())
+  ));
 
 -- Kişisel video yükleme: herkese açık bucket (migration `rve_oda_medya_bucket`).
--- Auth olmadığından imzalı URL yerine public tercih edildi (mevcut RLS-herkese-açık felsefesiyle tutarlı).
-insert into storage.buckets (id, name, public)
-values ('oda-medya', 'oda-medya', true)
+-- Auth olmadığından imzalı URL yerine public tercih edildi; oynatma public URL'den
+-- olduğu için okuma politikası gerekmez. Listeleme/silme yok, yalnız video kabul edilir.
+insert into storage.buckets (id, name, public, allowed_mime_types)
+values ('oda-medya', 'oda-medya', true, array['video/*'])
 on conflict (id) do nothing;
 
-create policy "oda_medya_select" on storage.objects for select
-  using (bucket_id = 'oda-medya');
 create policy "oda_medya_insert" on storage.objects for insert
   with check (bucket_id = 'oda-medya');
-create policy "oda_medya_delete" on storage.objects for delete
-  using (bucket_id = 'oda-medya');
 
 -- Yetim oda temizliği: 24 saattir güncellenmeyen odaları saatte bir sil.
 -- (Son üyenin tarayıcısı çökerse pagehide tetiklenmez; bu job artıkları toplar.)

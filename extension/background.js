@@ -91,12 +91,17 @@ const REST_BASLIK = {
   "Content-Type": "application/json",
 };
 
+// RLS, tablolara yalnız bu başlıktaki oda kodu için izin verir
+function odaBasligi() {
+  return { ...REST_BASLIK, "x-rve-oda": kod };
+}
+
 async function odaIdGetir() {
   if (!kod) return null;
   try {
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/rooms?code=eq.${encodeURIComponent(kod)}&select=id`,
-      { headers: REST_BASLIK }
+      { headers: odaBasligi() }
     );
     const [oda] = await r.json();
     odaId = oda ? oda.id : null;
@@ -116,7 +121,7 @@ async function mesajGonder(metin) {
   try {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/messages`, {
       method: "POST",
-      headers: { ...REST_BASLIK, Prefer: "return=representation" },
+      headers: { ...odaBasligi(), Prefer: "return=representation" },
       body: JSON.stringify({ room_id: odaId, nickname: ad, content: metin }),
     });
     const [satir] = await r.json();
